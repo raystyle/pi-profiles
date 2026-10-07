@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "Debug Desk Acceptance Batch E"
-description: "批 E net scan 验收 @ab5d90011:item1 发现面缺(流量拦截扫描 下 dbg_cli 排 5,catalog.json keywords 漂移三条),2/3/4/5 过(selftest 24 检查、活测 baseline200/probes4/slots16、账本 4 条 scan.probe、零指纹)"
-last_updated: 2026-10-07T19:30:51+08:00
+description: "复验 1-b @7591c2ebe:仍缺,流量拦截调试 = dbg_serve#1/dns_oob#2/tunnel#3/dbg_cli#4,catalog 已 regen 含字面词组仍不改序 ⇒ 残留属 ranker 打分"
+last_updated: 2026-10-07T19:45:02+08:00
 created: 2026-10-07T19:30:51+08:00
 ---
 
@@ -20,4 +20,26 @@ created: 2026-10-07T19:30:51+08:00
 复用要点:`rs_execute` 的后台运行不能只带 attach 读回执(参数校验要求 name/attach/ps 恰一,实传 attach 仍被拒),直接读 `~/.pi-rs/agent/rust-runs/<bg-id>.log` 即可拿信封。
 
 后续:补跑 catalog 生成把三条词写回(不改文件纪律下仅记录,未执行)。
+
+
+## 2026-10-07
+
+复验 @HEAD 8e2d058b7(`fix: batch E review round … three-pillar names`,`git rev-parse` 对齐)。只复验 item 1 发现面,改判:**query 1 过、query 2 缺**。
+
+- `rs_search 流量拦截扫描` → 1 dbg_serve / 2 tunnel_variant_scan / 3 **dbg_cli**(上轮为 #5)⇒ 两件进前 3,**过**。
+- `rs_search 流量拦截调试` → 1 dbg_serve / 2 dns_oob / 3 tunnel_variant_scan / 4 **dbg_cli** ⇒ 缺;重复一次同序,稳定。
+- 元数据面已修实:catalog.json 两件 keywords 均含 5 条新词(dbg_cli 列表 165-171 行,dbg_serve 193-199 行;版本升 1.4.1)。⇒ 上轮「加词未 regen」的根因已消除;残留是 **ranker 打分**(两件与目标词同权,却排在 dns_oob/tunnel_variant_scan 之后,疑为语义/模糊腿在 调试/扫描 上的漂移),不是关键词缺席。
+
+另:item 2/3/4/5 本轮未复测(不在复验范围),版本已从 1.4.0 升 1.4.1。
+
+
+## 2026-10-07
+
+复验第二次 @HEAD 7591c2ebe(`fix: dbg_cli description carries the three pillar names (discovery ranking)`)。只测 1-b:
+
+- `rs_search 流量拦截调试` → 1 dbg_serve / 2 dns_oob / 3 tunnel_variant_scan / **4 dbg_cli** ⇒ **仍缺**;与 8e2d058b7 一轮完全同序(两次运行稳定)。
+- 元数据面确认已 regen 到齐:`catalog.json:151` dbg_cli description 已字面含「流量拦截调试/流量拦截扫描/JS执行断点单步多步跟踪调试三面的驱动面」,两件 keywords 亦含该词(168 行 dbg_cli、196 行 dbg_serve);版本 dbg_cli 1.4.1 / dbg_serve 1.4.2。
+- ⇒ 结论:把目标词组写进描述仍未改变排序,ranker 不是「串出现即高分」的纯字面腿;dbg_serve(描述不含该三面词、仅 keywords 有)反居 #1,dns_oob/tunnel_variant_scan(两者都不含该词组)压过 dbg_cli。残留是 ranker 打分模型本身,需从其打分实现入手,不是元数据。
+
+对照:同批 1-a `流量拦截扫描` 在 8e2d058b7 已过(#1 dbg_serve/#2 tunnel_variant_scan/#3 dbg_cli)。
 
