@@ -1,6 +1,6 @@
 # Memory Index
 
-- [PRS Lab Campaign](prs-lab-campaign.md) 2026-10-07T17:29:00+08:00 -- 4 stuck 蒸馏:Q1 holding 判据误用(0.CL 止损)、Q2 无新 note 三增量+共享件、Q3 垫片落点规则+闭环件缺、Q4 换 oracle 维度(可见性探针须错峰);顺序 4→3→2→1;回执 /tmp/ph-stuck-distill.md
+- [PRS Lab Campaign](prs-lab-campaign.md) 2026-10-07T18:53:20+08:00 -- 4 stuck 攻击批(批50):1 solved(h2 隧道毒缓存收口)/ 3 stuck;Q4 可见性探针自污染、Q2 信任位记死、Q1 infra-blocked
 - [pi-rs archive acceptance checks](pi-rs-archive-acceptance-checks.md) 2026-10-06T22:22:16+08:00 -- How to verify the memory-de-seed / knowledge-seed-to-global batch: pty header capture, non-clobber + positive-control recipe, and two mode artifacts
 - [Hunter Chest Acceptance Batch B](hunter-chest-acceptance-batch-b.md) 2026-10-07T10:38:34+08:00 -- Batch B acceptance (tree 376aaf5f7): 5/5 passed - dns_oob live loop recipe, cred_matrix CRLF-template requirement, blind_oracle transport bucket, h2_req arg-parse proof
 - [rs_search Semantic Fix Acceptance](rssearch-semantic-fix-acceptance.md) 2026-10-07T11:15:54+08:00 -- rs_search semantic fix (bf15ef74a) acceptance: 5/5 pass in a fresh process; this session's process predates the fix so its rs_search still returns substring/0; cold-start index refresh verified; no test guards the anchor mapping
@@ -11,3 +11,4 @@
 - [tunnel_variant_scan acceptance regression 7681b92ea](tunnelvariantscan-acceptance-regression-7681b92ea.md) 2026-10-07T18:08:55+08:00 -- tunnel_variant_scan 自省验收 @7681b92ea(HEAD): 3/5 过; item1 rs_search 信封无 score/file, item2 selftest 无 rst 断言
 - [Regression Batch R1 - already-solved labs re-run](regression-batch-r1-already-solved-labs-re-run.md) 2026-10-07T18:26:42+08:00 -- 回归批 R1(4 题冷会话重解):H2.CL / CSP-dangling / GraphQL 三题 solved,capture-other-users 走私链通过但捕获的 victim session 匿名(账号步未收口);lab 发射钥匙 = portswigger.net .AspNetCore.CookiesC1/C2(存在 /tmp/cj1.json),auth0 已过期;chrome_cookies 默认输出会覆盖 chrome-jar.json
 - [tunnel_variant_scan acceptance regression bd422fd78 recheck](tunnelvariantscan-acceptance-regression-bd422fd78-recheck.md) 2026-10-07T18:32:20+08:00 -- tunnel_variant_scan 修订复验 @bd422fd78(实跑树 50af4b4fe):rst 断言过;发现面「tunnelling oracle」一查 rank 4 未进前 3(另一查 rank 1),判缺
+- [Debug Desk Acceptance Batch E](debug-desk-acceptance-batch-e.md) 2026-10-07T19:30:51+08:00 -- 批 E net scan 验收 @ab5d90011:item1 发现面缺(流量拦截扫描 下 dbg_cli 排 5,catalog.json keywords 漂移三条),2/3/4/5 过(selftest 24 检查、活测 baseline200/probes4/slots16、账本 4 条 scan.probe、零指纹)
