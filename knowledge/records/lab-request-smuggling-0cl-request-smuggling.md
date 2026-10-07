@@ -1,36 +1,34 @@
 ---
-title: "lab-request-smuggling-0cl-request-smuggling"
+title: lab-request-smuggling-0cl-request-smuggling
 ---
 
 # lab-request-smuggling-0cl-request-smuggling
 
 > evidences: [[h2-smuggling-family]]
 
-PortSwigger `request-smuggling/advanced/lab-request-smuggling-0cl-request-smuggling`(批 41 新实例
-`0a54001404b3a7a982386fee008e0086`)。目标:让每 5s 开首页的 Carlos 执行 `alert()`。
+PortSwigger `request-smuggling/advanced/lab-request-smuggling-0cl-request-smuggling`。批 44 实例 `0a5c00fe03e83bd1805b17ef00ce0051`(批 41 的 `0a520096…` 在批 44 中途已 504 `connecting to <inst>` 死掉)。目标:让每 5s 开首页的 Carlos 执行 `alert()`。
 
-- 判定:**stuck**(原语在档;**没有任何可作为 JS 载荷来源的面**,投递面也仍缺)。
+- 判定:**stuck**(机制面进一步收窄;仍缺可交付的载荷来源与 0.CL 帧。)
 
-## 复核与新增
+## 批 44 新增证据
 
-1. **前端同时吃 h1/h2**;`h2_req --header 'content-length: 5' --data 'ab'` 立即 200 ⇒ h2 的 CL 头被前端
-   丢弃/重算 ⇒ **H2.CL 帧在本 lab 不成立**(与 [[lab-request-smuggling-h2-cl-request-smuggling]] 相反)。
-2. `:path` 内 CRLF 透传成立(注入的 h1 请求会执行,可做副作用型攻击,如写评论)——批 35 已证。
-3. **首页没有任何 JS 文件**(只有 `/resources/labheader/js/labHeader.js`、`/resources/css/labsBlog.css`、
-   `/resources/images/blog.svg`、`/image/blog/posts/*.jpg`),且**页面里没有 exploit-link**(无 exploit server)。
-   ⇒ "让 Carlos 执行 `alert()`"这条链缺**载荷来源**:lab app 没有任何把参数反射进 JS 体的端点,
-   也没有可指向的外部脚本源(exploit server 不可达:走私出的请求只由 lab app 处理,见批 40)。
-4. 未见跨连接后端复用(批 35 实测:完整走私后新 h1/h2 follow-up 均 200;arm 连接保持打开也一样)。
+1. **畸形头 `Content-Length : N`(冒号前空格)在本实例不产生 0.CL 差分**:一次 write 发
+   `POST /resources/css/anything`(带 `Content-Length : 92`)+ 紧跟 `GET /404probe …` ⇒ **同连接拿到两条响应**
+   (`302 Location: /resources/css/anything/` + `404 "Not Found"`)⇒ 前后端对帧长的读法一致(无人 holding)⇒ 该畸变头不是这里的 0.CL 原语。
+   - 附带确证:**early-response gadget 存在**——静态目录路径 `/resources/css/anything` 立即回 302(不等 body),正是 0.CL 死锁所需的解结面。
+2. **h2 侧不成立**:`content-length: 100` 无 DATA ⇒ 立即 200(前端丢弃/重算 CL)⇒ 无 H2.CL/0.CL 帧。
+3. `:path` 内 CRLF 仍透传(注入的 h1 请求会执行),可作为**副作用**面(写评论等),但不构成 alert 交付。
+4. 首页资源清单:`/resources/labheader/js/labHeader.js`、`/resources/css/labsBlog.css`、`/resources/images/blog.svg`、`/image/blog/posts/*.jpg`;**无 exploit server**(`#exploit-link` 不存在),无自产 JS 体。
+5. 唯一 XSS gadget:`GET /post?postId=N` 把 **User-Agent 原样**写进 `<input type="hidden" name="userAgent" value="…">` ⇒ `"><script>alert()</script>` 可执行;但该头只能由**受害者自己的浏览器**提供 ⇒ 需走私把这条响应记到受害者的请求上。
 
-## 未决面
+## 外部形状(第三方 writeup,注明来源)
 
-- 需要:①一个能产生 JS 体响应的 lab 端面(本轮未找到,且无 exploit server);或 ②受害者浏览器自己的连接
-  被 CSD 式 desync(需要受害者访问我方页面——题面只说 Carlos 访问靶场首页)。
+- Kettle「HTTP/1.1 Must Die / 0.CL」+ Brandon T. Elliott 改编的 Turbo Intruder 队列:纯 **HTTP/1.1**、靠 `Content-Length :`(空格)造成 0.CL 死锁,配 **early-response gadget**(静态路径)与**双重 desync**(`stage1` → `stage2_chopped`+`stage2_revealed`+`smuggled` → 受害者 `GET /`),走私请求 = `GET /post?postId=8` + `User-Agent: a"/><script>alert(1)</script>`;需反复重放。
+  来源:`portswigger.net/blog/http-1-1-must-die-conquering-the-0-cl-challenge`、`brandon-t-elliott.github.io/0-cl-request-smuggling`(官方题页 solution 块未读)。
+- 未收口面:批 44 的畸形头单发实验**未复现帧长分叉**,说明缺的是整套双 desync 编排(chopped/revealed 的精确字节算术),而不是某个载荷。
 
 ## 复现
 
 ```
-lab_launch launch 4BAD74C356692BBAAB9602C955308F8A1B04CB866034F32286993566EFC8CC66 --widget-source /web-security/request-smuggling/advanced --jar <jar>
-h2_req <inst> --method GET --path '/ HTTP/1.1\r\nHost: <inst>\r\n\r\nGET /404z HTTP/1.1\r\nHost: <inst>\r\n\r\n'
-lab_http get <inst>/ --out /tmp/l1.html    # 首页:确认无 JS 资源
+conn_reuse <inst>/ --send-str 'POST /resources/css/anything HTTP/1.1\r\nHost: <inst>\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length : 92\r\n\r\nGET /404probe HTTP/1.1\r\nHost: <inst>\r\n\r\n'
 ```

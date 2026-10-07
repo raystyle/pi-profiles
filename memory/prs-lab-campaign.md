@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Lab Campaign"
-description: "Batch 43: all five stuck labs solved (SSTI gdprDelete, cache-key lowercase origin, LLM iframe echo, AI-scanner exfil, PP stderr channel)"
-last_updated: 2026-10-07T07:15:51+08:00
+description: "Batch 44: 6 stuck raw-socket labs re-attacked - 3 solved (h2-cl, cache-deception, cache-poisoning), 3 stuck with quantified new evidence (0CL, tunnelling ACL leak, tunnelling cache poison)"
+last_updated: 2026-10-07T09:14:31+08:00
 created: 2026-10-06T22:18:05+08:00
 ---
 
@@ -60,3 +60,26 @@ Batch 43: stuck 池五题 **全部 solved**(0 stuck)。开工先读知识库族�
   `__proto__":{"shell":"vim","input":":! cat /home/carlos/secret 1>&2\n"}` → `POST /admin/jobs`(必须 JSON)→ 响应 **`error.message` 里带子进程 stderr** ⇒ 免 Burp Collaborator 的外带信道(旧结论"响应只有 success 信号面"作废)。`execArgv` 型是 `fork` 专用,本题 runner 不是 fork。
 - 工具面教训:`sh_run` 传多段/带引号命令 argv 解析不可靠(输出串成仓库列目录)→ 改用 `find_files`/`read`/专用件;`poison_loop` 后台可当续毒定时器;`banner_verdict.congrats_line` 即取证锚点;实例易过期,开工先 `range_launch … --jar ~/.pi-rs/agent/chrome-jar.json`(lab-jar 的 auth0 已失效)。
 - 知识库:5 条 record 改写为 solved 终态 + 4 条新原子笔记(`cache-key-injection-key-algebra`、`prototype-pollution-child-process-stderr-exfil`、`llm-output-regurgitation-framing`、`twig-sandbox-delete-primitive`,均以 evidences 边连入对应族)。未 git 提交。
+
+## 2026-10-07
+
+Batch 44:stuck 池六题(raw-socket 类)再攻 —— **3 solved / 3 stuck**。开工先读族笔记(request-smuggling-family、h2-tunnelling-and-h2cl-practice、cache-and-smuggling-live-mechanisms、portswigger-platform-specifics)+ 项目档案;题解禁令对 stuck 项解除(第三方 writeup 可参考,来源已注明),官方题页 solution 块未读。未 git 提交。
+
+## 2026-10-07
+
+- **solved** `request-smuggling/advanced/lab-request-smuggling-h2-cl-request-smuggling`(实例 `0adf00e8…`,exploit `exploit-0af00050030b31e080ae2a84013d00cb`)——横幅 `Congratulations, you solved the lab!`
+  关键:**走私请求必须欠 1 字节**(`Content-Length: 13` + 12B 体),否则 302 立刻生成、无人认领(批 41 的失败根因);走私请求 `Host:` 写 exploit server ⇒ app 的 `/resources` 目录重定向按 Host 拼**绝对** 302 ⇒ 受害者 `analytics.js?uid=…` 请求补全即被重定向去执行 exploit JS。`h2cl_seq` 12 轮实测 3 轮 follow 收到 302(跨连接转移 ≈25%),持续 arm 才翻牌。
+- **solved** `request-smuggling/exploiting/lab-perform-web-cache-deception`(实例 `0ab0008703…`)——横幅同上。
+  arm `--cl-te 'GET /my-account HTTP/1.1\r\nX-Pad: '`(**不写 Host**,由受害者请求补)⇒ 受害者的 `tracking.js` 请求行落进 X-Pad、其 `Cookie` 成为走私请求的头 ⇒ 其账户页(含 API key)被前端记在 `tracking.js` 键上;`POST /submitSolution answer=<key>`。
+- **solved** `request-smuggling/exploiting/lab-perform-web-cache-poisoning`(实例 `0aba00ec…`,exploit `exploit-0a18009204e383b180ab02e701510042`)
+  302 出处 = app 自己的 `/post/next?postId=3`(Location 按 Host 拼绝对);走私请求 `Content-Length: 10` + 体 `y=`(**欠 8 字节**)+ `Host: exploit…`;紧随 `GET /resources/js/tracking.js` 补全 ⇒ 302 被记在 tracking.js 上(max-age 30、X-Cache: hit)。完整(不欠字节)版的 302 **不进缓存**(反例实测)。快节奏续毒 ~5 分钟后受害者命中翻牌。
+- **stuck** `request-smuggling/advanced/lab-request-smuggling-0cl-request-smuggling`(批 44 实例 `0a5c00fe…`;批 41 实例中途 504 死掉)
+  新证据:畸形头 `Content-Length : N`(冒号前空格)在**本实例不产生帧长分叉**——一次 write 发 `POST /resources/css/anything`(带该头)+ `GET /404probe` ⇒ 同连接**两条响应**(302 `/resources/css/anything/` + 404)⇒ 前后端读法一致;但**early-response gadget 确实存在**(静态目录路径立即回 302)。h2 侧 `content-length` 被丢弃/重算(立即 200)⇒ 无 H2.CL。首页无 exploit server,唯一 XSS gadget 是 `/post?postId=N` 原样回显 User-Agent。外部形状(Kettle「HTTP/1.1 Must Die」+ Brandon 改编 Turbo Intruder 队列:纯 h1、`Content-Length :` 死锁 + early-response gadget + 双重 desync,走私 `GET /post?postId=8` 带 UA 载荷,需反复重放)——缺的是整套双 desync 编排,不是载荷。
+- **stuck** `request-smuggling/advanced/request-tunnelling/lab-request-smuggling-h2-bypass-access-controls-via-request-tunnelling`(实例 `0a9b0076…`)
+  读通道量化:外层 `HEAD <path>` 的预期长度 = 该 path 自身体长,body 直接给出嵌套响应原文(`HEAD /admin` 2776 ⇒ 批 41 的"嵌套 401"其实是它)。泄漏律:嵌套 `POST /` + `Content-Length: N` + `search=` ⇒ R = **3389 + 转义后体长**,反射词在**页尾**;`<` 转义为 4 字节(每字符 +3)。要越过外层 `/`(=8946)的窗口必须 `E∈[5271,5367]` 且追加头块 A∈[56,96](CL 70 通/110 挂)⇒ 窗口恰等于 A,需一次精确命中。伪造 `X-SSL-VERIFIED/X-SSL-CLIENT-CN` 仍 401(缺 `X-FRONTEND-KEY`,未泄漏到)。
+- **stuck** `request-smuggling/advanced/request-tunnelling/lab-request-smuggling-h2-web-cache-poisoning-via-request-tunnelling`(实例 `0aa900a4…`)
+  载荷出处确证:`GET /resources/labheader/js?<script>alert(1)</script>` ⇒ `Location: /resources/labheader/js/?<script>alert(1)</script>`(**原样不编码**,带 max-age 30)。但受害者只访问 `/`,必须用外层 `HEAD /` 过读把嵌套字节读成 `/` 的体;**垫片请求不可行**(嵌套重定向响应带 `Keep-Alive: timeout=0`,后端随即关连接 ⇒ 前端永远等不满)⇒ 唯一嵌套响应自身要 ≥ ~8.4KB ⇒ 查询串必须垫到 8.4K 字符级,缺"注入体由文件/生成器提供"的件。
+- **工具面新增**:项目件 `smuggle_win`(CL.TE 窗口收割:arm ×N → settle → check ×M → cooldown;marker 命中即停,`--out` 落盘正文)。`h2cl_seq` 是 H2.CL 两连接序器的正确件(arm + 独立连接 follow + 轮次统计)。
+- **平台面**:exploit server 主机只出现在**靶场实例首页**的 `<a id='exploit-link'>` 里——Academy 题页(/web-security/…)与 `/api/widgets`(labinfo/launchlab)都只有占位符;旧实例的 exploit 域在新实例上 504。实例会过期(504 `connecting to <inst>`),先 `range_launch` 重开。
+- **纪律教训**:`http_dump` 抓 Academy 题页会**原样带回官方 solution 块**(`page_read` 才剥);后续只对 `page_read` 的输出做 grep。
+
