@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Batch E1 - burp-scanner essential-skills labs"
-description: "Round 3 on lab 2 with the eight-family battery: five narrow passes over /post/comment, /my-account?id=wiener and /login (78/96/30/48/50 probes) all report zero suspects; comment name+website confirmed HTML-escaped; discovered the cookie slot cannot be CRLF-tested (CRLF payloads are cookie-unsafe and skipped) so that verdict is \"untested\" not \"clean\"; logged the contamination tag and that the POST /login template baseline is a 400"
-last_updated: 2026-10-07T22:39:56+08:00
+description: "Closing round on lab 2: POST /login ssti+crlf pass (51 probes, 5 skipped, 0 suspects, baseline 400 stale-csrf) and the hand-rolled cookie CRLF test in four legs (control 200; %0d%0a in username -> 500; bare CRLF -> 302 + new anon cookie; %0d%0a in token -> 302) with no response-header injection or marker anywhere - cookie CRLF surface closed, lab still unsolved"
+last_updated: 2026-10-07T22:47:11+08:00
 created: 2026-10-07T20:15:45+08:00
 ---
 
@@ -89,4 +89,28 @@ Driven by real page actions: browser logged in as wiener (page_interact fill+sub
 
 ### Source discipline note (this lab carries a contamination tag)
 - Session shape (`username:token`, first-colon split) and the four auth states were established by direct probing last round; the "XSS in the cookie" hypothesis came from an earlier accidental read of the lab page's solution text via `http_session` (it does not strip solution blocks; `page_read` does, and http_session now strips too). Everything recorded here is reproducible from the requests themselves; nothing in this round's results depends on that leaked text.
+
+
+## 2026-10-07
+
+## Closing round: the two untested lab-2 faces (both zero displacement)
+
+### 1. POST /login with ssti+crlf (the form-slot header-block oracle)
+- Template: POST /login, slots `path:1:login`, `cookie:session`, `form:csrf`, `form:username`, `form:password`, `pname:new`, `header:Referer`, `header:User-Agent`.
+- Receipt: `probes 51, skipped_cookie_unsafe 5, suspects []`, `baseline {len 60, status 400}` - the stale-csrf rejection baseline, as predicted last round; judge only after baseline screening.
+- Combined with the earlier sqli+xss pass (50 probes) and the ssti+crlf pass on /post/comment, every form slot of both forms now has sqli/xss/ssti/crlf coverage with zero suspects.
+
+### 2. Cookie username slot, real CRLF hand-rolled (`raw_http`, session `wiener%3aTsRlIwo3c3xBM0i10rkXHU5CAFViVp06`)
+| leg | request | status | response header block |
+| --- | --- | --- | --- |
+| control | `Cookie: session=wiener%3a<token>` | 200 | baseline: Content-Type, Cache-Control, Set-Cookie (plain), X-Frame-Options, Connection, Content-Length |
+| encoded CRLF in username | `session=wiener%0d%0aZXQJ-CRLF%3a<token>` | 500 (2480B) | no injected header; CRLF reaches the username field -> unknown user -> generic error page |
+| bare CRLF in header value | `Cookie: session=wiener` + CRLF + `ZXQJ-CRLF: bare` | 302 /login + fresh anon cookie | no injected header; injected text absorbed as its own request header, cookie value truncated to `wiener` (no token) |
+| encoded CRLF in token | `session=wiener%3a<token>%0d%0aZXQJ-CRLF` | 302 /login + fresh anon cookie | no injected header; token lookup fails |
+- Verdict: **cookie slot CRLF closed** - no response-header injection, no marker, no malformed Location/Set-Cookie; only semantics-consistent divergence (500 for unknown user, 302 for a broken token).
+- Detail worth keeping: the app URL-decodes the cookie value *before* splitting on the first colon (that is why the server itself emits `wiener%3a<token>`). A payload colon therefore becomes the split point, which is why the username-position payload has to stay colon-free.
+
+### Round close
+- Both faces zero displacement; per the round's own rule, lab 2's cookie-crlf surface is recorded as hand-rolled and re-tested, and no further rounds are opened on this lab.
+- `banner_verdict` after the round: `solved=false, congrats_line=null`.
 
