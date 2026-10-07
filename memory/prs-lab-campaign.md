@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Lab Campaign"
-description: "Batch 46: 3 stuck http labs re-attacked - 2 solved (host-header SSRF + cache poisoning, unblocked by the _lab instance cookie that disables the Academy edge's Host/duplicate-header checks), 1 stuck with quantified evidence (260 empty-token confirms all miss)"
-last_updated: 2026-10-07T13:17:05+08:00
+description: "Batch 47 (final): 3 raw-socket labs re-attacked - 0 solved / 3 stuck, but each quantified to an actionable next lever (0CL holding primitive absent cross-instance; h2 sanitizer matrix + expected-length oracle; cache payload echo verbatim-as-sent, 8.4KB pad assembly missing)"
+last_updated: 2026-10-07T14:12:04+08:00
 created: 2026-10-06T22:18:05+08:00
 ---
 
@@ -120,4 +120,18 @@ Batch 46 closed (stuck 池 http 类 3 题:2 solved / 1 stuck)。开工先读知�
   新事实:①**邮箱域名白名单**(非 `@ginandjuice.shop` → 页面 `Invalid email address`)⇒ 确认邮件永远读不到,无法做「真 token」控制实验;②`race_send --url2 <confirm> --body2 '' --a N --b M --stagger-ms X --no-cookie-b` 是正确原语:每轮 10-25 个同名 `/register` 稳定 **4-6 个新 INSERT 成功**(200/2636B,其余 3142B 重复页)⇒ register 窗口可达;③但 **6 轮共 260 次** `POST /confirm?token[]=`(CL 0、不带 cookie;stagger 0/60/80/250/350/800;burst 10-25×25-60)**100% `400 "Incorrect token: Array"`**;④`token[][]=&token[]=` → 500 占位符泄漏 ⇒ 数组确实铺进 bind(真的跑 `WHERE token = ''`)。未决面 = 半构造行对其它连接不可见(显式事务未提交)或 token 列默认 NULL;下一手 = 把 confirm 从「一个瞬间齐发」改成「窗口上连续播撒」(缺 spread 件,race_send 只有固定 stagger)。
 - 工具面:新项目件 **`abs_sweep`**(绝对请求行 + `Host: <net>.FUZZ` 并行定时扫,baseline/outliers 口径)——`raw_matrix` 会 trim 头名、`raw_http` 会自动补 Host 造成「重复头」误判层界,只有本件能正确表达该形状;顺手修 `raw_matrix` 编译错(`report::failure` 需 `&str`)。规则:`--send-str`/字节级件用于畸形头名,`raw_matrix` 用于成组形状对比。
 - 沉淀:两条 host-header 实录改 solved(含层界表)、race 实录更新 stuck(260 次量化);batch-notes.md 追加第 46 批节。
+
+
+## 2026-10-07
+
+Batch 47(终批,stuck 池最后一攻)closed:raw-socket 3 题 **0 solved / 3 stuck**,但三题都把「缺什么」量化到了可执行的下手位。开工读知识库(h2-tunnelling-and-h2cl-practice / request-smuggling / h2-smuggling-family / cache-and-smuggling)+ 三题实录;实例全部 range_launch 重开;官方 solution 块未读;未 git 提交。
+
+- **stuck** `advanced/lab-request-smuggling-0cl-request-smuggling`(实例 0aec00c8…)
+  `Content-Length : N`(冒号前空格)在**全新实例**上依旧无帧长分叉:一次 write 发 `POST /resources/css/anything`(带该头)+ `GET /404probe` ⇒ 同连接两条完整响应(302 + 404)⇒ 跨实例稳定,该畸变头不是本实例的 0.CL 原语。新细节:两条响应 `Keep-Alive: timeout=10`(不是 tunnelling 题的 timeout=0)、第二条带新 `Set-Cookie`。early-response gadget(静态目录立即 302)仍在;首页零 JS / 无 exploit-link ⇒ 交付面只能是把 `/post?postId=N`(User-Agent 反射)的响应投给受害者的 `/`。缺的仍是整套双 desync 字节算术(holding 原语在本实例需换一个)。
+- **stuck** `request-tunnelling/lab-request-smuggling-h2-bypass-access-controls-via-request-tunnelling`(实例 0a750011…)
+  **前端头消毒矩阵**(全部可复现):头**值**含 CRLF → `RST_STREAM`;头**名**含 CRLF → `400 {"error":"Invalid request"}`;头**名**含裸 LF → `400 {"error":"Newlines in headers are not allowed"}`;头名含空格/制表 → **放行**(未归一化,但不越权);**`:path` 含 CRLF → 唯一可用注入面**。读通道 byte-exact 复现(内层 401 原文 + 全部响应头躺在 h2 body,如 `Keep-Alive: timeout=0`、`Content-Length: 2776`);内层头块**不收尾**才可读,自己收尾时前端回 `500 Received only 174 of expected 2776 bytes of data` ⇒ 多一个「期望长度记账」二值 oracle。门 = 会话角色,前端信任头不继承给内层请求。
+- **stuck** `request-tunnelling/lab-request-smuggling-h2-web-cache-poisoning-via-request-tunnelling`(实例 0af50042…)
+  载荷出处复证并**纠了批44 一个细节**:回显**逐字跟随输入**——发 `%3Cscript%3E` 就回编码形,要裸 `<script>alert(1)</script>` 必须发裸字节(批44 的"原样不编码"是因为当时发的就是裸字节)。302 自身 `cache-control: max-age=30` / `age: 0` / `x-cache: miss` ⇒ 可缓存;载体约束不变(嵌套重定向 `Keep-Alive: timeout=0` ⇒ 垫片请求不可行 ⇒ 嵌套响应自身须 ≥ 外层 `HEAD /` 的期望长度 ~8.6-8.9KB ⇒ 查询串要垫到 ~8.4KB)。本批可用杠杆:`h2_req --hdr2-file/--data-file/--pad-to`(大注入体可走文件),尚未装配。
+- 沉淀:三条实录改写(含矩阵/数值/下一步);新原子笔记 **`h2-frontend-sanitizer-matrix`**(注入槽矩阵 + 两条读通道 = 内层响应原文 / 前端期望长度记账,连入 h2-smuggling-family);batch-notes.md 追加第 47 批节 + 马拉松总收官节。
+- **马拉松收官口径**:剩余 stuck 的共同形状是「需要整套多跳编排而非单个载荷」(0.CL 双 desync、h2 隧道三件套、partial-construction 窗口),缺的是编排水位/垫片算术/持行原语,不是新知识。
 

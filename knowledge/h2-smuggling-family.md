@@ -131,3 +131,7 @@ request、名内 LF→明确报错);但**另一实例**(绕访问控制 tunnelli
 
 - HTTP/1.1 基础组见 [[request-smuggling-family]];单包齐发见 [[race-conditions-family]]。
 - 方法论:web-vuln-methods(seed 层,按名引用)。
+
+## Links
+
+- evidences: [[h2-frontend-sanitizer-matrix]]
