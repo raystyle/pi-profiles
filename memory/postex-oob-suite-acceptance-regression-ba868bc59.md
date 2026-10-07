@@ -35,7 +35,7 @@ commit `2f9e3793b`「fix: postex acceptance round - discovery heads carry the fa
 
 已排除 stale-index 假阴性:mirror 03:31:03 已同步新头;`.zvec-grep` 03:31:04 manifest + 03:32:03 embedding.index.*.proxima,113 个文件晚于 03:30,`zg --status` coverage 95/95 queue 0。即索引确含新文本,排序仍不动。
 
-副作用观察:zg 的 FTS tokenizer=jieba,embedding=local/potion-code-16m-v2(256d)。对 `操作侧` 这类描述内已有 CJK 词能召回 postex_dns/relay,但新加词 `通道族` 召回不到那四件 —— 描述头的 CJK 新词对该 code 模型既不进 FTS 有效词表也不拉高向量分,故「加族名+自名」未改变该查询排序。ASCII 查询正常(`postex` 五件全进前 5;`postex relay channel events` 命中 http/relay/dns)。
+副作用观察:zg 的 FTS tokenizer=jieba,embedding=local/potion-code-16m-v2(256d)。对 `操作侧` 这类描述内已有 CJK 词能召回 postex_dns/relay,但新加词 `通道族` 召回不到那四件 —— 描述头的 CJK 新词对该 code 模型既不进 FTS 有效词表也不拉高向量分,故「加族名+自名」未改变该查询排序。 **[2026-10-08 更正]** 此论不完整:真根因是 zg Rust 切块器的头附着断裂(//! 头与首个符号之间隔着 use 时头整段不进索引,fts/vector 两腿全瞎),与词表无关;见 knowledge/rs-search-mirror-header-relocation.md 与 6b105f78d。ASCII 查询正常(`postex` 五件全进前 5;`postex relay channel events` 命中 http/relay/dns)。
 
 判定:item 1 **缺**(不满足 ≥4/5 进前 6)。
 
