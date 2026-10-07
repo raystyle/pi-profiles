@@ -42,3 +42,11 @@ browse/CDP 面。属工具面,入口是账户会话。
 - 邮件客户端:`https://exploit-<id>.exploit-server.net/email`(读发给受害者/攻击者的确认信,抽 token)。
 - widget-lab-id -> 题名/URL:POST `portswigger.net/api/widgets` `academy-labstatus`。
 - 活跃 PSW 会话是短命件(如 `/tmp/*-jar.json`),跨批不可依赖;会话底座见 [[prototype-pollution-family]] 的发射链段。
+
+## 会话底座:应用会话驱动发射,不是 auth0
+
+- 驱动 `range_launch` 的钥匙其实是 **`portswigger.net` 的 `.AspNetCore.CookiesC1/C2` 应用会话**(session cookie,无 exp),
+  不是 `login.portswigger.net` 的 `auth0`(各 profile DB 里 auth0 的 exp 都在 2026-10-06 前后,已过期)。持应用会话时发射链**不**落 Auth0 登录页。
+- 该应用会话现存在 `/tmp/cj1.json`(`portswigger.net` 键含 `.AspNetCore.CookiesC1/C2` + `SessionId`);
+  每个实例先 `cp` 一份到 `/tmp/<lab>-jar.json` 再 `range_launch … --jar`。`~/.pi-rs/agent/lab-jar.json` 只有 auth0,已失效。
+- **坑**:`chrome_cookies` 默认输出就是 `~/.pi-rs/agent/chrome-jar.json`,无 `--out` 跑一次会**覆盖**掉那里原有的 campaign 会话(本次事故)。改 profile/主机过滤前先 `--out` 到别处。

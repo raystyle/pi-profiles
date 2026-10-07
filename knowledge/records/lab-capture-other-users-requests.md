@@ -41,3 +41,15 @@ solved_check <lab>/ --jar <victim-jar> -> {"solved":true}
 - 受害者请求头块 ~815B(Chrome VICTIM UA,`cookie:` 在末尾);deficit 调参是收口关键,先 750(截到 `secret=`)再 815(完整)。
 - 本 lab 前端**跨客户端连接复用后端连接**(两连接分工可行);`race_send` 的触发 POST 不会被算进 pending body(它们走了别的后端连接,回 200 正常首页)。
 - 评论落库后读页即可,不需要 exploit server。
+
+## R1 回归:走私链通过,账号步未收口
+
+实例 `0a6f004c04e8508981183e9c00980092`。评论表单**匿名可用**(该实例登录按钮不用:weiner:peter 被拒,与 CSP 题不同);
+`conn_reuse --cl-te 'POST /post/comment … Content-Length: 907(体 89B,deficit 818)'` arm 后,`race_send --method POST --form search=… --n 4` 触发,
+`nap 8` 后读 `/post?postId=1`:评论正文 = 受害者**完整**请求(GET /,Victim UA),含
+`cookie: victim-fingerprint=Hirh…; secret=mrIfq81Q9CN9JsFT8xXthGeBhP4W6H7G; session=cVHMhItbOxiUIynwJz86xT9fOxT3EiA`。
+
+- **deficit 校准(可复现)**:815 → session 被截成 29 字符;818 → 完整 32 字符(= 受害者请求全长 818B);再大(1307)后端永不等满 → 无评论。
+- **未收口**:该 session 单发 / +secret / +victim-fingerprint / 带 Victim UA 原始字节 / h1 与 h2 — `GET /my-account` 一律 302 `/login`,
+  且响应会给回一个新 `session` cookie ⇒ 捕获到的受害者会话是**匿名**的,本实例 victim bot 似从未登录 ⇒ 拿不到 administrator。
+- 与批次 34 的差异只在受害者会话是否已登录;走私链与 deficit 全部复现。

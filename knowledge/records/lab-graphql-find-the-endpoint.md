@@ -56,3 +56,10 @@ solved_check "<inst>/" --jar /tmp/mar-jar.json
 ## 独立性如实标注
 
 规则更正(禁读题解)前,首抓题页全文将 solution 折叠块一并读出。本记录所用的 `/api` 端点与「`__schema` 后插换行绕过」与题解一致,不能排除受其影响;每步仍以实例响应实证。
+
+## R1 回归验证
+
+实例 `0a890082030cb669807c3f9000e40038`,全链一次通过:`GET /api` → 400 `Query not present` → `query{__typename}` →
+`query{__schema%0A{types{name}}}` 绕 introspect 正则 → `queryType/mutationType` 字段确认 `getUser(id)`/`deleteOrganizationUser(input)` →
+ids 1,2,3 存在(2=wiener、3=carlos;4/5=null)→ `mutation{deleteOrganizationUser(input:{id:3}){user{id username}}}` 回 carlos →
+banner `solved:true`。件:range_launch / page_read / http_session / objref_scan / banner_verdict。

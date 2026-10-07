@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Lab Campaign"
-description: "Batch 49: 6 stuck labs re-attacked - 2 solved (Angular without-strings canonical orderBy/fromCharCode payload; javascript:-URL zero-parenthesis throw/onerror payload), 4 stuck with sharpened evidence (desync_probe zero suspects for 0.CL; 8811-byte front-end expectation for h2 tunnelling; 8419 for the cache lab; h2 single-write bursts still miss the partial-construction window)"
-last_updated: 2026-10-07T17:13:58+08:00
+description: "4 stuck 蒸馏:Q1 holding 判据误用(0.CL 止损)、Q2 无新 note 三增量+共享件、Q3 垫片落点规则+闭环件缺、Q4 换 oracle 维度(可见性探针须错峰);顺序 4→3→2→1;回执 /tmp/ph-stuck-distill.md"
+last_updated: 2026-10-07T17:29:00+08:00
 created: 2026-10-06T22:18:05+08:00
 ---
 
@@ -169,4 +169,18 @@ Batch 49(马拉松终攻第二波,stuck 池 6 题全上):**2 solved / 4 stuck**�
 - **stuck** `race-conditions/lab-race-conditions-partial-construction`(实例 0a880057…)— 补上最后一个未试维度 `h2_burst`(一条 h2 连接、一次 write、独立 stream 同时到达):1 register + 25 confirm → register **200/2636**、25 confirm 全 **400 `"Incorrect token: Array"`**;只给 register 带 `phpsessionid`(排除 PHP session 锁)仍全 400;`token=` 一律 **403 `"Forbidden"`**、`token[]=` / `token[]` 一律 400。载荷形状与 writeup 完全吻合 ⇒ **差的不是采样也不是并发模型**,而是半构造行对另一连接/stream 不可见(未提交事务 或 token 默认值非 `''`)。累计约 530 次零命中,时序维度彻底用尽。
 - 工具面:本批主用 `h2_burst`(h2 单写齐发)、`desync_probe`(第一跳原语计数 oracle)、`page_alert --click`(真手势)、`page_read`(取 widget-lab-id,顺带确认 solution 块已剥离)、`h2_req --path`(隧道读通道 + 期望长度记账)。`h2_req --pad-to` 语义 = 垫 DATA;大 `:path` 只能走 `--hdr2-file` 或新件。
 - 沉淀:6 条实录按终态改写;`javascript-url-payload-when-parentheses-are-stripped` 新原子笔记(连 xss-context-family);`angularjs-1-4-4-sandbox-escape-practice-notes` 的「override 后编译坏」一条按批49 实测改写。
+
+
+## 2026-10-07
+
+## 2026-10-07T17:35+08:00 — 4 stuck 蒸馏研究(三工作台之一,不改仓)
+
+逐题读 records 未决面 + 搜知识库/记忆 + 读件源码(HEAD `92178f8f`),回执 `/tmp/ph-stuck-distill.md`。四条决策:
+
+- **Q1 0.CL 走止损**:holding 判据被当成"响应条数"用;0.CL 的真正签名是"探针未被应答 + 首响应只在探针字节写出之后到达"(批49 的 1 响应行被当 non-suspect 丢了)。`cl-colon-space`/`cl-tab-name` 的 0 响应 = 前端**解析了**畸变 CL 名并等 body ⇒ H-V 前提在本 infra 否证。件面:扩 `desync_probe` 三态分类(answered_probe / first_byte_ms / class)+ 补全测试,**不加候选**;条件件 `desync_double_stage`(有 suspect 才谈编排)。
+- **Q2 隧道 ACL 无新 note**:[[h2-frontend-sanitizer-matrix]] 已含槽矩阵与记账 oracle(M=外层 path 自身响应长),[[h2-tunnelling-and-h2cl-practice]] 已含凭据来路纪律。只补三处增量:M 逐 path 可预取(/admin=2776、/=8811);**前端追加头不落进可见 body** ⇒ 信任位来路不能靠回显判;X-SSL-*/客户端证书来路=TLS 层、HTTP 不可得 ⇒ 记死。新件 `tunnel_variant_scan`(与 Q3 共用)。
+- **Q3 隧道缓存件面确认**:`h2_req --pad-path-to`(`e2bd4a7c`)语义 = 把整条 `:path` 补到 N 字节(`/;p` 段重复 + `/;` 收口 + truncate);`--pad-to` 仍只垫 DATA;`--path` 只吃 argv、**无 `--path-file`**。新蒸馏一条**垫片落点规则**:垫片必须在**内层 URI 内**(前端自己补 ` HTTP/1.1` + 头块是同一机制的另一面),尾部垫片即进内层 query ⇒ 302 的 Location 变长、记账增长;垫在内层块收尾之后只会变成畸形下一条请求。仍缺闭环件 `tunnel_len_assembler`(活测 M → 标定固定开销 → 反推 pad → 解析 `Received only N of expected M` → pass)。
+- **Q4 竞态半构造换维度**:**修正一条易误用的数字** —— "20 并发同名注册 ⇒ 4-5 个 INSERT"**不是**可见性判据(同刻齐发的存在性检查都发生在任何 INSERT 完成之前)。可见性判据必须是**窗口内错峰播发的探针**:`race_spread` 打 `/register`(同名)按体长类判定(新 INSERT 页 2636B vs 重复用户名页 3142B;登录腿同为二值),写侧仍 `race_send` 齐发。时序维度已穷尽(≈530 confirm × 3 种并发模型):换 oracle 维度、不加样本。件面:扩 `race_spread` 补体长类 + `offset_ms`,不新建。
+
+顺序:**Q4(最便宜的决定性实验,先止损)→ Q3(最高解题概率,件已齐)→ Q2(一刀扫内层切法 + 来路记死)→ Q1(重跑 20 候选,零 holding 即 infra-blocked 停手)**。若目标改为"解题",把 Q3 提首位。
 
