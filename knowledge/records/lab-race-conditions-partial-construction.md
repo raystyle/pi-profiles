@@ -27,6 +27,16 @@ title: lab-race-conditions-partial-construction
 - 若①成立,唯一出路是让 confirm **与 register 复用同一 DB 连接/事务**(HTTP 层不可达)⇒ 该 lab 在本 infra 结构性不可解;若②成立,则要找"非空但可预测"的半构造值。
 - 件面:`race_spread` 的 `--hit-substr` 与状态分布已是正确判据;`race_send --stagger-ms` 的齐发形保留作对照。
 
+## 新证据(批49:h2 单写齐发 = 最后的未试维度,仍全 miss)
+
+`h2_burst`(一条 h2 连接、一次 write、所有请求作为独立 stream 同时到达):
+
+1. 1 register + 25 `POST /confirm?token[]=`(带 jar)→ register **200/2636**(新 INSERT 成功),25 confirm **全 400 `"Incorrect token: Array"`**;`burst_bytes 3937`。
+2. 同上,但**只有 register 带 `Cookie: phpsessionid=…`**(排除 PHP session 文件锁把 confirm 串行在 register 之后)→ 仍 25×400;`burst_bytes 2645`。
+3. 2 register + 15 confirm(混 `token[]=` / `token[]` / `token=`):`token=` 一律 **403 `"Forbidden"`**(空标量被当「无 token」早挡),`token[]=` 与 `token[]` 一律 400 `Array`,零命中。
+
+⇒ 载荷形状被独立验证是对的(与 writeup 的「token[]= 有效、空标量 token= → Forbidden」完全一致),**问题既不是采样也不是并发模型**:h2 单写齐发已覆盖 register 的整个处理时段,半构造行对**另一条连接/stream**始终不可见 ⇒ 只剩两种解释未排除:(a) INSERT 在未提交事务里,(b) token 列默认值不是 `''` 而 `= ''` 永不命中。累计约 **530 次**空 token confirm 零命中。判定仍 **stuck**(时序维度已彻底用尽,下一步只能换维度观测半构造行本身)。
+
 ## 复现命令
 
 ```

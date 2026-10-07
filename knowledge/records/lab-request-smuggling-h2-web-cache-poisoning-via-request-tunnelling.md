@@ -24,6 +24,14 @@ title: lab-request-smuggling-h2-web-cache-poisoning-via-request-tunnelling
 - 装配未跑通:`:path` 需要 `--hdr2-file` 的字节形态(逐字含 CRLF 的伪头)还是 `--path @file` 仍未定;另需现测本实例 `/` 的精确体长(前端期望长度)才能算出垫片字节数。
 - 下一个可证伪的判据沿用 lab 2 的记账面:外层 `HEAD /` + 注入,若前端报 `500 Received only N of expected M bytes of data` 就能直接读出"嵌套响应是否够长",不需要猜。
 
+## 新证据(批49:外层期望长度精确值 + 边缘 cookie 门)
+
+- `http_dump <inst>/` → **200, content-length: 8419**,`cache-control: max-age=30`,`x-cache: miss`,`age: 0` ⇒ 外层 `HEAD /` 期望长度 = **8419**(批47 估的 8.6~8.9K 精确化)。嵌套 302 必须自身 ≥ 8419,垫片字符数 = 8419 − 302 固定头长,可算。
+- 边缘门:手造 `Cookie: _lab=1` → **400 `Client Error: Too Nosy`**("Tampering with the _lab cookie is not required")⇒ `_lab` 只由边缘下发,不可伪造(批46 结论的加强版)。
+- `h2_req --pad-to N` 只垫 **DATA**,不垫 `:path`;大 `:path` 得走 `--hdr2-file`(把整条注入塞进 header NAME)或由件生成 ⇒ 8.4KB 垫片的**装配件仍缺**(下一手:写一个「按目标长度生成垫片并直发 h2 :path」的件,而不是手打字节)。
+
+判定仍 **stuck**(载荷出处与缓存面已复证,缺的是垫片装配)。
+
 ## 复现命令
 
 ```

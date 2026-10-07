@@ -25,3 +25,7 @@ PortSwigger XSS context 题的通用判定/利用模式:先探照射点与编码
 ## 相关族
 
 - DOM 型源→汇见 [[dom-xss-family]];Angular/CSTI 表达式面见 [[client-side-template-injection-family]];CSP 表单面见 [[csrf-family]]。
+
+## Links
+
+- evidences: [[javascript-url-payload-when-parentheses-are-stripped]]

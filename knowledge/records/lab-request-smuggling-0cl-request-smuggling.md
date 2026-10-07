@@ -23,6 +23,21 @@ title: lab-request-smuggling-0cl-request-smuggling
 - 缺的仍是**双 desync 的字节算术**:`stage1` 制造 holding、`stage2_chopped/revealed` 精确切分、再把 `GET /post?postId=8` + `User-Agent: a"/><script>alert(1)</script>` 投到 Carlos 的 `/` 上;本实例并不响应 `Content-Length :`(空格)畸变,所以外部 writeup 的第一跳需要换一个 holding 原语(候选:h2 降级侧 `content-length` 名字畸变、`Transfer-Encoding` 与 CL 并存、obs-fold)。
 - 15 分钟单题上限内无法把整套编排跑通;下一手应先造"holding 探测件"(逐畸变头测同连接响应条数),再谈编排。
 
+## 新证据(批49:desync_probe 十候选全扫)
+
+`desync_probe <inst>/ --jar chrome-jar.json` 逐条试畸变头,判据 = 同一连接上「该请求 + 探针 GET」共收到几条响应:
+
+| 候选                   | 响应数 | 状态                                        |
+| -------------------- | --- | ----------------------------------------- |
+| cl-colon-space       | **0** | 无响应(前端把该畸形 CL 当**真** CL 等 body ⇒ 挂住)     |
+| cl-tab-name          | **0** | 同上                                        |
+| cl-dup-diff          | 1   | 400                                       |
+| cl-plus-te / te-plus-cl / te-bare / te-x | 1 | 403(边缘拒绝)                          |
+| cl-lower             | 1   | 200                                       |
+| cl-obs-fold / cl-space-val | 1 | 400                                   |
+
+⇒ **suspects = []**:本实例上这批畸变都不产生「同一连接多一条响应」的第一跳 desync;`Content-Length : N` 不是 H-V holding 原语,0 响应还说明它会被当成真 CL 吃掉后续字节(与批44/47 conn_reuse 结论一致)。0.CL 的在档形状依赖 H-V 头,该前提在本 infra 不成立 ⇒ 判定仍 **stuck**。
+
 ## 复现命令
 
 ```

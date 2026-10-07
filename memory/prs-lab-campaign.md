@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Lab Campaign"
-description: "Batch 48: 3 stuck labs re-attacked with new weapons - 0 solved but two prior conclusions overturned (real-gesture javascript: URLs ARE percent-decoded; the Angular charAt override corrupts compiled getters to NaN/no-op) and the party-construction window refuted as \"needs more samples\""
-last_updated: 2026-10-07T15:04:49+08:00
+description: "Batch 49: 6 stuck labs re-attacked - 2 solved (Angular without-strings canonical orderBy/fromCharCode payload; javascript:-URL zero-parenthesis throw/onerror payload), 4 stuck with sharpened evidence (desync_probe zero suspects for 0.CL; 8811-byte front-end expectation for h2 tunnelling; 8419 for the cache lab; h2 single-write bursts still miss the partial-construction window)"
+last_updated: 2026-10-07T17:13:58+08:00
 created: 2026-10-06T22:18:05+08:00
 ---
 
@@ -151,4 +151,22 @@ Batch 48 closed(携新武器再攻 browser 2 + http 1):**0 solved / 3 stuck**,�
 - **stuck(否证"样本不够")** `race-conditions/lab-race-conditions-partial-construction`(实例 0a30003a…)
   新件 `race_spread`(读侧窗口播撒)上线:第一轮 3s/4 worker 只发出 12 个 confirm ⇒ 实测 `/confirm?token[]=` **每次约 1s**,worker 串行 ⇒ **采样率由 worker 数决定,不是 interval**;第二轮 12s/16 worker 发出 **151** 个,覆盖一整轮注册(含 5 个新 INSERT)⇒ **151/151 = 400,hits:0**;另测 20 并发 register 整批 11.5s。累计(46 批齐发 260 + 48 批播撒 151 + 早期 ~70)≈ **480 次空 token confirm 全 miss** ⇒ 窗口不是采样不够,而是半构造行对其它连接**不可见**(INSERT 在未提交事务里)或 token 列默认 NULL;同 session 的 confirm 又会被 PHP session 锁串行化(永远排在 register 之后)⇒ **时序维度已用尽**,下一步要换维度(找能回显用户表的端点直接看半构造行的可见性/token 值)。
 - 沉淀:三条实录改写;新原子笔记 **`javascript-url-execution-needs-real-gesture`**(判读纪律:该行为需要用户激活的一律用真输入管线判读,合成 click 的负结果不是否证);`xss-context-family` 的 `javascript:` 行按新结论改写;batch-notes.md 追加第 48 批节。
+
+
+## 2026-10-07
+
+Batch 49(马拉松终攻第二波,stuck 池 6 题全上):**2 solved / 4 stuck**。开工先搜知识库族笔记 + 项目记忆;实例全部 range_launch 重开(用 page_read 取回的 64 位 widget-lab-id,写进了本批记录);官方 solution 块未读,第三方 writeup 参考已注明来源;未 git 提交。
+
+- **solved** `csti/lab-angular-sandbox-escape-without-strings`(实例 0ad700ab…)— 横幅 `<h4>Congratulations, you solved the lab!</h4>`(banner_verdict solved=true)
+  服务端生成形 = 每个 query 参数一段 `var key='<参数名>'; $scope.query[key]='<值>'; $scope.value=$parse(key)($scope.query);`(顺序 = Java HashMap;`search` 必须存在;值是 HTML 转义的,只有**参数名**可用)。成文载荷(一条 $parse 内完成):
+  `?search=1&toString().constructor.prototype.charAt=[].join;[1]|orderBy:toString().constructor.fromCharCode(120,61,97,108,101,114,116,40,49,41)=1`(名字里 `=` 发 `%3D`)→ `page_alert` 实测 `fired=true, alerts:["alert:1"]`。
+  **推翻批48 结论**:批48 的「override 之后编译出来的 getter 坏了(NaN/静默 no-op)」是**拆分两次 $parse 调用**造成的假象;同一条表达式里 override + `[1]|orderBy:…` 正常工作。已改写 [[angularjs-1-4-4-sandbox-escape-practice-notes]]。
+- **solved** `cross-site-scripting/contexts/lab-javascript-url-some-characters-blocked`(实例 0a2a000f…)— `academyLabBanner is-solved` + congrats 行
+  零括弧载荷(借模板 `fetch('/analytics',{…}).finally(…)` 自带的括弧):`/post?postId=1&x='},x=x=>{throw/**/onerror=alert,1337},toString=x,window+'',{x:'` → `onerror=alert` 收 `Uncaught 1337`。新原子笔记 [[javascript-url-payload-when-parentheses-are-stripped]]。踩坑:`postId` 在本实例被整数校验(400 `"Invalid blog post ID"`),载荷必须另开参数;`^`/`{`/`}`/`|` 保留而 `= : > +` 被编码;真点击才触发(`--click '.is-linkback a'`)。
+- **stuck** `advanced/lab-request-smuggling-0cl-request-smuggling`(实例 0a7d008b…)— 新件 `desync_probe` 十候选全扫:**suspects = []**。`cl-colon-space` 与 `cl-tab-name` 都是 **0 响应**(前端把畸形 CL 当真 CL 等 body ⇒ 挂住),其余 400/403/200 ⇒ 本 infra 不存在 H-V holding 原语,0.CL 在档形状的前提不成立。
+- **stuck** `request-tunnelling/lab-request-smuggling-h2-bypass-access-controls-via-request-tunnelling`(实例 0a8d009f…)— `:path` 隧道 + 内层 `Content-Length` 拿到锐利记账:`500 Received only 3923 of expected 8811 bytes of data` ⇒ 本实例 `/` 的前端期望 = **8811**,后端给 3923,装配余量可算;内层响应体**没有**回显 `X-SSL-*`/`X-FRONTEND-KEY` ⇒ key 仍未泄漏,门仍是会话角色。
+- **stuck** `request-tunnelling/lab-request-smuggling-h2-web-cache-poisoning-via-request-tunnelling`(实例 0ab10071…)— `/` = **200, content-length: 8419**,`max-age=30`,`x-cache: miss`(外层期望精确值);手造 `Cookie: _lab=1` → **400 "Tampering with the _lab cookie"**(边缘只下发,不可伪造);`h2_req --pad-to` 只垫 DATA 不垫 `:path` ⇒ 8.4KB 垫片需要新装配件(下一手)。
+- **stuck** `race-conditions/lab-race-conditions-partial-construction`(实例 0a880057…)— 补上最后一个未试维度 `h2_burst`(一条 h2 连接、一次 write、独立 stream 同时到达):1 register + 25 confirm → register **200/2636**、25 confirm 全 **400 `"Incorrect token: Array"`**;只给 register 带 `phpsessionid`(排除 PHP session 锁)仍全 400;`token=` 一律 **403 `"Forbidden"`**、`token[]=` / `token[]` 一律 400。载荷形状与 writeup 完全吻合 ⇒ **差的不是采样也不是并发模型**,而是半构造行对另一连接/stream 不可见(未提交事务 或 token 默认值非 `''`)。累计约 530 次零命中,时序维度彻底用尽。
+- 工具面:本批主用 `h2_burst`(h2 单写齐发)、`desync_probe`(第一跳原语计数 oracle)、`page_alert --click`(真手势)、`page_read`(取 widget-lab-id,顺带确认 solution 块已剥离)、`h2_req --path`(隧道读通道 + 期望长度记账)。`h2_req --pad-to` 语义 = 垫 DATA;大 `:path` 只能走 `--hdr2-file` 或新件。
+- 沉淀:6 条实录按终态改写;`javascript-url-payload-when-parentheses-are-stripped` 新原子笔记(连 xss-context-family);`angularjs-1-4-4-sandbox-escape-practice-notes` 的「override 后编译坏」一条按批49 实测改写。
 
