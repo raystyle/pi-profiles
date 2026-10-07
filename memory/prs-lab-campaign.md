@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Lab Campaign"
-description: "Batch 47 (final): 3 raw-socket labs re-attacked - 0 solved / 3 stuck, but each quantified to an actionable next lever (0CL holding primitive absent cross-instance; h2 sanitizer matrix + expected-length oracle; cache payload echo verbatim-as-sent, 8.4KB pad assembly missing)"
-last_updated: 2026-10-07T14:12:04+08:00
+description: "Batch 48: 3 stuck labs re-attacked with new weapons - 0 solved but two prior conclusions overturned (real-gesture javascript: URLs ARE percent-decoded; the Angular charAt override corrupts compiled getters to NaN/no-op) and the party-construction window refuted as \"needs more samples\""
+last_updated: 2026-10-07T15:04:49+08:00
 created: 2026-10-06T22:18:05+08:00
 ---
 
@@ -134,4 +134,21 @@ Batch 47(终批,stuck 池最后一攻)closed:raw-socket 3 题 **0 solved / 3 stu
   载荷出处复证并**纠了批44 一个细节**:回显**逐字跟随输入**——发 `%3Cscript%3E` 就回编码形,要裸 `<script>alert(1)</script>` 必须发裸字节(批44 的"原样不编码"是因为当时发的就是裸字节)。302 自身 `cache-control: max-age=30` / `age: 0` / `x-cache: miss` ⇒ 可缓存;载体约束不变(嵌套重定向 `Keep-Alive: timeout=0` ⇒ 垫片请求不可行 ⇒ 嵌套响应自身须 ≥ 外层 `HEAD /` 的期望长度 ~8.6-8.9KB ⇒ 查询串要垫到 ~8.4KB)。本批可用杠杆:`h2_req --hdr2-file/--data-file/--pad-to`(大注入体可走文件),尚未装配。
 - 沉淀:三条实录改写(含矩阵/数值/下一步);新原子笔记 **`h2-frontend-sanitizer-matrix`**(注入槽矩阵 + 两条读通道 = 内层响应原文 / 前端期望长度记账,连入 h2-smuggling-family);batch-notes.md 追加第 47 批节 + 马拉松总收官节。
 - **马拉松收官口径**:剩余 stuck 的共同形状是「需要整套多跳编排而非单个载荷」(0.CL 双 desync、h2 隧道三件套、partial-construction 窗口),缺的是编排水位/垫片算术/持行原语,不是新知识。
+
+
+## 2026-10-07
+
+Batch 48 closed(携新武器再攻 browser 2 + http 1):**0 solved / 3 stuck**,但**推翻了两条在档结论**,三题的"墙"都换了位置。开工读族笔记 + 三题实录;实例全部 range_launch 重开(lab 1/2 前两次被 302 回 /web-security/,疑似并发实例额度;batch47 实例过期后重试即成)。官方 solution 块未读;未 git 提交。
+
+- **stuck(推翻核心前提)** `cross-site-scripting/contexts/lab-javascript-url-some-characters-blocked`(实例 0a0e000d…)
+  **真用户手势下 Chrome 会先百分号解码再执行 `javascript:` URL**:`page_alert 'data:text/html,<a id=t href="javascript:alert%281337%29">go</a>' --click '#t'` → `{"fired":true,"alerts":["alert:1337"]}`。批18/38/44 的"现代 Chrome 不解码"是**合成 `a.click()` 的假阴性**,由此推出的"双重编码换字面括弧"整条推理作废。
+  新墙:编码器在**值 / 参数名 / 路径**三个槽都删除 `( ) [ ]` 反引号 反斜杠 与所有 `%`(`x=alert(1337)` → `x=alert1337`;`&(()=b` 名字里的括弧也没;路径带括弧 → 404),而 `%27` 在点击时会变成 `'` ⇒ **JS 单引号串可破,但作者侧写不出括弧**,`alert(1337)` 只能借模板 `fetch('/analytics',{…body:'…'}).finally(_ => window.location = '/')` 里现成的两组圆括配对来拼 —— 构造未完(奇偶引号配对 + `;` 截断 + `//` 注释尾段是下一个枚举面)。
+- **stuck(墙从沙箱检查移到编译器)** `csti/lab-angular-sandbox-escape-without-strings`(实例 0aaa00fc…)
+  `page_eval_batch` 分桶实测(harness:`P=$parse`、`S={a:"alert(1)"}`、alert 钩子):
+  可用的 override 形式 = `P('a.constructor.prototype.charAt=[].join')(S)`(字符串型 scope 属性取 String;`toString.constructor…` 会抛,因为 Object.prototype.toString.constructor = Function 被拦)。
+  override 生效后(已证 `String.prototype.charAt` → `function join() { [native code] }`):**`P('1+1')(S)` 返回 NaN**(连算术都坏)、`P('a')(S)` 正常返回字符串、`P('constructor.constructor(a)()')(S)` **undefined:无异常、无执行**(静默 no-op);同一表达式在未 override 时是 Uncaught。
+  裸 JS 侧原语完全可用:`Function('window.__fired=99')()` → 99、`S.constructor.constructor('window.__fired=98')()` → 98 ⇒ 墙不在 ensureSafe*,而在 **override 把新编译的 getter 本身弄坏了**(算术 NaN / 调用静默丢失)。
+- **stuck(否证"样本不够")** `race-conditions/lab-race-conditions-partial-construction`(实例 0a30003a…)
+  新件 `race_spread`(读侧窗口播撒)上线:第一轮 3s/4 worker 只发出 12 个 confirm ⇒ 实测 `/confirm?token[]=` **每次约 1s**,worker 串行 ⇒ **采样率由 worker 数决定,不是 interval**;第二轮 12s/16 worker 发出 **151** 个,覆盖一整轮注册(含 5 个新 INSERT)⇒ **151/151 = 400,hits:0**;另测 20 并发 register 整批 11.5s。累计(46 批齐发 260 + 48 批播撒 151 + 早期 ~70)≈ **480 次空 token confirm 全 miss** ⇒ 窗口不是采样不够,而是半构造行对其它连接**不可见**(INSERT 在未提交事务里)或 token 列默认 NULL;同 session 的 confirm 又会被 PHP session 锁串行化(永远排在 register 之后)⇒ **时序维度已用尽**,下一步要换维度(找能回显用户表的端点直接看半构造行的可见性/token 值)。
+- 沉淀:三条实录改写;新原子笔记 **`javascript-url-execution-needs-real-gesture`**(判读纪律:该行为需要用户激活的一律用真输入管线判读,合成 click 的负结果不是否证);`xss-context-family` 的 `javascript:` 行按新结论改写;batch-notes.md 追加第 48 批节。
 

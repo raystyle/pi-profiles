@@ -6,50 +6,42 @@ title: lab-angular-sandbox-escape-without-strings
 
 > evidences: [[client-side-template-injection-family]]
 
-- 题面:Reflected XSS with AngularJS sandbox escape without strings(/web-security/cross-site-scripting/contexts/client-side-template-injection/lab-angular-sandbox-escape-without-strings)
-- 实例(批45R):https://0a27009d04926c3f8034171b00b000c7.web-security-academy.net
-- 判定目标:逃逸沙箱执行 `alert`(不可用 `$eval`、不可用字符串);状态:**stuck**(批45R 推翻两条旧前提,未决面更锐利)
+- 题面:逃逸 AngularJS 沙箱执行 `alert`,不可用 `$eval`、不可用字符串。
+- 实例(批48):https://0aaa00fc03b8daa880250336000a0035.web-security-academy.net
+- 状态:**stuck**(墙从"沙箱检查"移到了"override 之后 getter 本身是坏的")
 
-## 机制(实测生成代码)
+## 机制(生成代码)
 
-```
-<script>angular.module('labApp',[]).controller('vulnCtrl',function($scope,$parse){
-  $scope.query = {};
-  var key = '<参数名>'; $scope.query[key] = '<参数值>'; $scope.value = $parse(key)($scope.query);
-  …每个参数一块… });
-<h1 ng-controller=vulnCtrl>N search results for {{value}}</h1>
-```
+`var key='<参数名>'; $scope.query[key]='<值>'; $scope.value = $parse(key)($scope.query);` —— 参数名 = 表达式,scope = `$scope.query`。
 
-- **参数名 = 表达式**($parse 以 `$scope.query` 为 scope 求值);`{{value}}` 只是文本 sink。
+## 新证据(`page_eval_batch` 页内批量分桶)
 
-## 关键事实(早期两条前提已否证)
+harness:`--prelude 'try{window.P=angular.element(document.body).injector().get("$parse")}catch(e){P=null} window.S={a:"alert(1)",b:"pw12345678"}; window.alert=<hook>'`,候选写成纯 JS 表达式 `P('EXPR')(S)`。
 
-1. **没有 `search` 参数 = 没有循环**:`?a=x`、`?[]=x` 等不带 `search` 的请求根本不生成 controller 脚本(响应 8512B,blog-header 段无 `<script>`)⇒ 任何省略 `search` 的探针都是无效样本(批38 部分探针存疑)。
-2. **迭代顺序不是字典序,而是 Java HashMap 顺序**:`?search=1&a=zz&b=alert(1337)&a.constructor.prototype.charAt=[].join=x&constructor.constructor(b)()=x` 生成顺序 = `constructor.constructor(b)()` → `a` → `search` → `b` → `a.constructor.prototype.charAt=[].join`(**override 落到最后**)。想先 override 再 payload 必须逐 URL 探测顺序、或改键名碰 hash。
-3. **参数值被 HTML 转义**:`b=xx'+alert(1337)+'xx` 生成 `$scope.query[key] = 'xx&apos;+alert(1337)+&apos;xx'` ⇒ 值破串(引号注入)**封死**。
-4. **override 之后新编译的 getter 是坏的**:页面内 oracle——先 `$parse('a.constructor.prototype.charAt=[].join')({a:'zz'})`(生效,`String.prototype.charAt` 变 join),再 `$parse('constructor.constructor(b)()')({b:'alert(1337)'})` → JS `ReferenceError: b is not defined`(词法器/编译器自身依赖 charAt,被 override 后产出的取数函数是坏的)。即 payload 必须「过坏词法器」且「不含被 ensureSafe* 拦的直面」。
+1. **可用的 override 形式**:`P('a.constructor.prototype.charAt=[].join')(S)` → 值:function;随后 `String(String.prototype.charAt)` → `function join() { [native code] }` ✓。
+   注意 `toString.constructor.prototype.charAt=[].join` 会 **Uncaught**(`Object.prototype.toString.constructor` = Function → 被拦);必须用**字符串型 scope 属性**取到 String。
+2. **override 之后新编译的 getter 是坏的(量化)**:
+   - `P('1+1')(S)` → 桶 value:number 但值为 **NaN**(JSON 里序列化成 null)⇒ **连算术都被破坏**;
+   - `P('a')(S)` → `"alert(1)"`(标识符读取仍正常);
+   - `P('constructor.constructor(a)()')(S)` → **undefined,无异常、无执行**(静默 no-op);同一表达式在**未** override 时是 Uncaught。
+3. **原语在裸 JS 里可用**(排除"Function 被 CSP 禁"的解释):
+   `Function('window.__fired=99')()` → 99;`S.constructor.constructor('window.__fired=98')()` → 98;而任何经 `$parse` 的等价式都不执行。
+
+⇒ 结论:override 确实废掉了 isIdent 重写与 isecobj 抛错,但**产出的取数函数同时被 charAt 污染成错的**(算术 NaN / 调用静默丢失),所以"先 override 再跑执行式"这条路不是被检查拦住,而是被**编译器自身**拦住。
 
 ## 未决面
 
-- 缺的原语:①一个在 override 之后仍能正确编译的执行式(现证 `constructor.constructor(<scope 变量>)()` 编译即坏);或 ②无需 override 就能过 ensureSafe 的执行式。
-- 已证可用素材:override 本身、`[].join`、参数名里 `[ ] | ;` 原样放行、`$scope.query` 里任意键值可当字符串源(值不可含裸引号)。
-
-## 证据摘录
-
-```
-生成代码顺序(见上 URL): constructor.constructor(b)() / a / search / b / a.constructor.prototype.charAt=[].join
-值转义: $scope.query[key] = 'xx&apos;+alert(1337)+&apos;xx';
-oracle: {"override":"ok","charAtIsJoin":true,"chain":"ERR:b is not defined"}
-```
+- 要找的是"**其生成 getter 不经过被污染的 charAt 路径**"的表达式,或一条**无需 override** 就能过 ensureSafe 的执行式(scope 值可当无引号字符串源,参数名里 `[ ] | ;` 放行)。
+- 下一步:把候选式扩到 `P('EXPR')(S)` 的更大枚举(算术/成员/调用/字面量四类对照),用 `1+1` 是否 NaN 当"该次 parse 是否被污染"的**探针**,二分出哪些语法节点安全。
 
 ## 复现命令
 
 ```
 range_launch launch D82E3A0C…C05390F1 --jar ~/.pi-rs/agent/chrome-jar.json
-http_session get "https://<inst>/?search=1&a=zz&b=alert(1337)&a.constructor.prototype.charAt%3D%5B%5D.join=x&constructor.constructor%28b%29%28%29=x" --out /tmp/l3.html
-text_grep 'var key' /tmp/l3.html        # 看生成顺序
+page_eval_batch "https://<inst>/?search=1" --file /tmp/cands.txt --ws ws://127.0.0.1:9333 \
+  --prelude 'try{window.P=angular.element(document.body).injector().get("$parse")}catch(e){P=null} window.__fired=0;window.alert=function(){window.__fired++};window.S={a:"alert(1)"};'
 ```
 
 ## 关系
 
-- 族:[[client-side-template-injection-family]](「参数名当表达式」行);沙箱表见 [[angularjs-1-4-4-sandbox-escape-practice-notes]]。
+- 族:[[client-side-template-injection-family]];沙箱表见 [[angularjs-1-4-4-sandbox-escape-practice-notes]]。

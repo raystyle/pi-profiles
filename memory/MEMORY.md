@@ -1,6 +1,6 @@
 # Memory Index
 
-- [PRS Lab Campaign](prs-lab-campaign.md) 2026-10-07T14:12:04+08:00 -- Batch 47 (final): 3 raw-socket labs re-attacked - 0 solved / 3 stuck, but each quantified to an actionable next lever (0CL holding primitive absent cross-instance; h2 sanitizer matrix + expected-length oracle; cache payload echo verbatim-as-sent, 8.4KB pad assembly missing)
+- [PRS Lab Campaign](prs-lab-campaign.md) 2026-10-07T15:04:49+08:00 -- Batch 48: 3 stuck labs re-attacked with new weapons - 0 solved but two prior conclusions overturned (real-gesture javascript: URLs ARE percent-decoded; the Angular charAt override corrupts compiled getters to NaN/no-op) and the party-construction window refuted as "needs more samples"
 - [pi-rs archive acceptance checks](pi-rs-archive-acceptance-checks.md) 2026-10-06T22:22:16+08:00 -- How to verify the memory-de-seed / knowledge-seed-to-global batch: pty header capture, non-clobber + positive-control recipe, and two mode artifacts
 - [Hunter Chest Acceptance Batch B](hunter-chest-acceptance-batch-b.md) 2026-10-07T10:38:34+08:00 -- Batch B acceptance (tree 376aaf5f7): 5/5 passed - dns_oob live loop recipe, cred_matrix CRLF-template requirement, blind_oracle transport bucket, h2_req arg-parse proof
 - [rs_search Semantic Fix Acceptance](rssearch-semantic-fix-acceptance.md) 2026-10-07T11:15:54+08:00 -- rs_search semantic fix (bf15ef74a) acceptance: 5/5 pass in a fresh process; this session's process predates the fix so its rs_search still returns substring/0; cold-start index refresh verified; no test guards the anchor mapping
