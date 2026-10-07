@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Batch E1 - burp-scanner essential-skills labs"
-description: "Re-attack round on targeted-scanning: stock request clean across all seven net-scan families (53 + 33 probes, 0 suspects); corrected the target fact (stock integer is per-instance state, not a per-string hash); pinned net scan v1.5-1.7 defects (full seven-family run never completes -> EAGAIN, patterns need `net intercept off`, glob `*` = scheme+host only, 20s window + timer throttling, image cache blocks the path scan); lab window reset only via /try-again"
-last_updated: 2026-10-07T21:04:09+08:00
+description: "Round 3 on lab 2 with the eight-family battery: five narrow passes over /post/comment, /my-account?id=wiener and /login (78/96/30/48/50 probes) all report zero suspects; comment name+website confirmed HTML-escaped; discovered the cookie slot cannot be CRLF-tested (CRLF payloads are cookie-unsafe and skipped) so that verdict is \"untested\" not \"clean\"; logged the contamination tag and that the POST /login template baseline is a 400"
+last_updated: 2026-10-07T22:39:56+08:00
 created: 2026-10-07T20:15:45+08:00
 ---
 
@@ -61,4 +61,32 @@ Target: lab-discovering-vulnerabilities-quickly-with-targeted-scanning only. Out
 
 ### Still open
 - Where the intended file-read primitive lives: not on `/product/stock` (seven families clean), not on `/image/<path>` (traversal 404s at every encoding tried), not on `/filter` (listing alias), no other reachable route in a 40-name wordlist.
+
+
+## 2026-10-07
+
+## Third round: lab 2 (scanning non-standard data structures) vs the eight-family battery
+
+Desk 1.9.1 / cli 1.6.0, eight families (sqli/xss/cmdi/path/xxe/ssrf/ssti/crlf), eight slot shapes (query/cookie/form/json/header/pathseg/pname/body:xml), `--speed` fast|normal|thorough. Instance 0a6000b804f03df88488183000f9004a. Verdict: **not solved**, no suspect anywhere.
+
+### Passes (narrow, 2-4 families each; release the pattern between passes)
+| request | battery | probes | skipped | suspects |
+| --- | --- | --- | --- | --- |
+| POST /post/comment | sqli,xss | 78 | 4 | [] |
+| POST /post/comment | ssti,crlf,path,cmdi | 96 (truncated) | 25 | [] |
+| GET /my-account?id=wiener | crlf,ssti | 30 | 5 | [] |
+| GET /my-account?id=wiener | sqli,ssti,path | 48 | 10 | [] |
+| POST /login | sqli,xss | 50 | 4 | [] |
+
+Driven by real page actions: browser logged in as wiener (page_interact fill+submit), comment submitted via a synchronous eval click inside the armed window, account/login requests fired by `browser_suite goto` right after arming.
+
+### Manual probes this round
+- Comment `website` field is **HTML-escaped**: `http://x.com"><svg/onload=alert(1)>` renders as `href="http://x.com&quot;&gt;&lt;svg/onload=alert(1)&gt;"`. Same for `name` (`<b>BX</b>` -> `&lt;b&gt;BX&lt;/b&gt;`). Neither the author name nor the link target is injectable.
+- `POST /login` re-submitted from the logged-in browser: the app answers 400 with body len 60 (stale csrf), so the login POST used as a scan template is a rejection response - worth remembering when reading that baseline.
+
+### Coverage gap found (matters for the lab's headline surface)
+- The session-cookie username slot cannot be CRLF-tested by the scanner: CRLF payloads are cookie-unsafe and are dropped (`skipped_cookie_unsafe` 4-25 per pass, including the cookie slot). A printf-style raw request through `raw_http`/`conn_reuse` is the only way to put a real CRLF into a cookie value - the cookie slot's crlf verdict from this scanner is "not tested", not "clean".
+
+### Source discipline note (this lab carries a contamination tag)
+- Session shape (`username:token`, first-colon split) and the four auth states were established by direct probing last round; the "XSS in the cookie" hypothesis came from an earlier accidental read of the lab page's solution text via `http_session` (it does not strip solution blocks; `page_read` does, and http_session now strips too). Everything recorded here is reproducible from the requests themselves; nothing in this round's results depends on that leaked text.
 
