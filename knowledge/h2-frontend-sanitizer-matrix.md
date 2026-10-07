@@ -28,3 +28,14 @@ Academy 的 h2 前端(h2→h1 降级)在 request tunnelling 题里**每个注入
 ## 关系
 
 - 方法族:[[h2-tunnelling-and-h2cl-practice]]、[[request-smuggling-family]];题面级数值与帧形见 [[portswigger-platform-specifics]]。
+
+
+## 记账 oracle 的两条实测增量(批49 蒸馏)
+
+- **M 是逐 path 常数,可预取**:`500 Received only N of expected M` 的 M 是
+  该外层 path 自身响应长(/admin=2776、/=8811 本实例)——先 http_dump 取 M
+  再谈切法,不必试错。
+- **读回看不见前端自己追加的头块**:隧道回显给的是内层请求/响应字节,
+  X-SSL-* 类前端追加头不落进可见 body(M 与交付长的差里也读不到)⇒ 信任位
+  来路不能靠回显判定,只能用状态/长度分叉;X-SSL-* 的合法来路是 TLS 层,
+  HTTP 客户端不可得 ⇒ 该凭据行记死,不再磨头名变形。
