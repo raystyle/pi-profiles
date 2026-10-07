@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Lab Campaign"
-description: "Batch 44: 6 stuck raw-socket labs re-attacked - 3 solved (h2-cl, cache-deception, cache-poisoning), 3 stuck with quantified new evidence (0CL, tunnelling ACL leak, tunnelling cache poison)"
-last_updated: 2026-10-07T09:14:31+08:00
+description: "Batch 45R: 4 stuck browser labs re-attacked - 2 solved (json-parse web messages, Angular sandbox+CSP), 2 stuck with prior conclusions refuted (without-strings HashMap order/no-search no-loop; js-url encoder alphabet); key lesson: focus payloads need a focused document"
+last_updated: 2026-10-07T12:11:12+08:00
 created: 2026-10-06T22:18:05+08:00
 ---
 
@@ -82,4 +82,26 @@ Batch 44:stuck 池六题(raw-socket 类)再攻 —— **3 solved / 3 stuck**。�
 - **工具面新增**:项目件 `smuggle_win`(CL.TE 窗口收割:arm ×N → settle → check ×M → cooldown;marker 命中即停,`--out` 落盘正文)。`h2cl_seq` 是 H2.CL 两连接序器的正确件(arm + 独立连接 follow + 轮次统计)。
 - **平台面**:exploit server 主机只出现在**靶场实例首页**的 `<a id='exploit-link'>` 里——Academy 题页(/web-security/…)与 `/api/widgets`(labinfo/launchlab)都只有占位符;旧实例的 exploit 域在新实例上 504。实例会过期(504 `connecting to <inst>`),先 `range_launch` 重开。
 - **纪律教训**:`http_dump` 抓 Academy 题页会**原样带回官方 solution 块**(`page_read` 才剥);后续只对 `page_read` 的输出做 grep。
+
+
+## 2026-10-07
+
+Batch 45R closed (stuck 池 browser 类 4 题:2 solved / 2 stuck)。开工读族笔记(dom-xss / xss-context / CSTI)+ 沙箱实践笔记 + 项目档案;题解禁令对 stuck 项解除(未读官方 solution 块);实例全部 range_launch --jar ~/.pi-rs/agent/chrome-jar.json 重开。未 git 提交。
+
+- **solved** `dom-based/…/lab-dom-xss-using-web-messages-and-json-parse`(实例 0a530094…,exploit 0a1900fa…)
+  交付响应即 `is-solved` + `<h4>Congratulations, you solved the lab!</h4>`。
+  **批16/38 结论作废**:本版 Chrome **会**执行赋给「刚 append 的 about:blank iframe」的 `javascript:` URL——手工测试顶层 title 由 CHK1 变 SINK1(父页副作用可见),旧判读看的是 iframe 自身 contentDocument.title(恒空)。交付:
+  `<iframe src="https://<inst>/" onload='this.contentWindow.postMessage(JSON.stringify({type:"load-channel",url:"javascript:print()"}),"*")'></iframe>`(onload 用单引号 + JSON.stringify 现拼,免 &quot; 转义)。
+- **solved** `csti/lab-angular-sandbox-escape-and-csp`(实例 0a250081…,exploit 0a320037…)
+  banner_verdict solved=true。载荷 79/80 字符:`?search=<input id=x ng-focus=$event.composedPath()|orderBy:'(y=alert)(document.cookie)'>#x`;交付页 `location='<inst>/?search=…%27%3E#x'`。
+  两处勘误:①服务端硬限 80(正文 "Search term cannot exceed 80 characters"),autofocus 版 82 字符不可用,但**片段 #x 聚焦在聚焦态文档里加载期就触发**——批38 判它"早于 bootstrap"是未聚焦文档的假阴性;②`orderBy` **只有字符串形谓词逐元素求值**(`filter:'…'` → Maximum call stack;`orderBy:…` 无引号 = 空操作)。
+- **stuck** `csti/lab-angular-sandbox-escape-without-strings`(实例 0a27009d…)——推翻批38 两条前提:
+  ①**不带 search 参数完全不生成 controller 循环**(整段 <script> 消失)⇒ 旧的无 search 探针无效;
+  ②参数迭代顺序 = **Java HashMap 顺序**(实测 override 落最后),字典序假设作废;
+  ③页内 oracle:override 生效后新编译 getter 是坏的(`$parse('constructor.constructor(b)()')({b:'alert(1337)'})` → JS ReferenceError: b is not defined)⇒ 词法器依赖 charAt,过坏词法器的要求更硬;
+  ④参数**值**被 HTML 转义(`'`→`&apos;`)⇒ 值破串封死。
+- **stuck** `cross-site-scripting/contexts/lab-javascript-url-some-characters-blocked`(实例 0a2700ef…)
+  编码器字母表定到字符级:保留 alnum + `" { } | ^ $ , * / ~ _ - . !`(空格→`+`);编码 `' ; : = @ < > & + ?`;**删除 `( ) [ ]` 反引号 `\` 与所有 `%`**(x=A%25%32%38%25%32%39B → A2829B ⇒ 双重编码路死)。唯一反射点=href 内 JS 单引号串;`"` 可破 HTML 属性但 `=` 被编码 ⇒ 只能注属性名;`&` 被编码 ⇒ 用不了 `&#39;` ⇒ 串不可破不可闭。Chrome 不解码 javascript: URL(复测)。
+- **工具面关键教训(focus 假阴性)**:未聚焦文档里 Chrome 只设 document.activeElement、**不派发 focus 事件** ⇒ ng-focus/autofocus/#id 类载荷全部假阴性。判读前 `browser_suite call Page.bringToFront`(hasFocus→true)同一载荷立刻 fired=true;另 ng-event 对 focus/blur 用 `$applyAsync`,同一次 eval 读副作用也假阴性(下一次 eval 读)。跨源 iframe 判读用 **fetch beacon + exploit server 访问日志**(page_alert 只读顶层 window.__labAlerts,读不到子帧)。
+- 沉淀:records 四条改写(两条 solved / 两条 stuck);沙箱实践笔记更新(orderBy 规则、80 硬限、片段聚焦可用、lab3 四条新证);新原子笔记 `focus 触发载荷判读:先让文档处于聚焦态`;batch-notes.md 追加第 45R 批节。
 
