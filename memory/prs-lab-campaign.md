@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Lab Campaign"
-description: "4 stuck 蒸馏:Q1 holding 判据误用(0.CL 止损)、Q2 无新 note 三增量+共享件、Q3 垫片落点规则+闭环件缺、Q4 换 oracle 维度(可见性探针须错峰);顺序 4→3→2→1;回执 /tmp/ph-stuck-distill.md"
-last_updated: 2026-10-07T17:29:00+08:00
+description: "4 stuck 攻击批(批50):1 solved(h2 隧道毒缓存收口)/ 3 stuck;Q4 可见性探针自污染、Q2 信任位记死、Q1 infra-blocked"
+last_updated: 2026-10-07T18:53:20+08:00
 created: 2026-10-06T22:18:05+08:00
 ---
 
@@ -183,4 +183,18 @@ Batch 49(马拉松终攻第二波,stuck 池 6 题全上):**2 solved / 4 stuck**�
 - **Q4 竞态半构造换维度**:**修正一条易误用的数字** —— "20 并发同名注册 ⇒ 4-5 个 INSERT"**不是**可见性判据(同刻齐发的存在性检查都发生在任何 INSERT 完成之前)。可见性判据必须是**窗口内错峰播发的探针**:`race_spread` 打 `/register`(同名)按体长类判定(新 INSERT 页 2636B vs 重复用户名页 3142B;登录腿同为二值),写侧仍 `race_send` 齐发。时序维度已穷尽(≈530 confirm × 3 种并发模型):换 oracle 维度、不加样本。件面:扩 `race_spread` 补体长类 + `offset_ms`,不新建。
 
 顺序:**Q4(最便宜的决定性实验,先止损)→ Q3(最高解题概率,件已齐)→ Q2(一刀扫内层切法 + 来路记死)→ Q1(重跑 20 候选,零 holding 即 infra-blocked 停手)**。若目标改为"解题",把 Q3 提首位。
+
+
+## 2026-10-07
+
+Batch 50(4 stuck 攻击批 · pH 三工作台蒸馏处方落地后首攻):**1 solved / 3 stuck**。先读四条 record + 蒸馏回执 `/tmp/ph-stuck-distill.md` + 族笔记;四题实例全部 range_launch 重开(发射钥匙 `/tmp/cj1.json` 的 `portswigger.net .AspNetCore.CookiesC1/C2`,每实例 cp 一份再 `--jar`;`page_read` 取回 64 位 widget-lab-id)。官方 solution 块未读;未 git 提交。
+
+- **solved** `request-tunnelling/lab-request-smuggling-h2-web-cache-poisoning-via-request-tunnelling`(实例 `0a2800ce0401a85880428a4b00d800c5`)— `academyLabBanner is-solved` + `Congratulations, you solved the lab!`(在 `/post?postId=1` 读到)。
+  一次收口:`M = GET / 的 content-length = 8566`;`h2_req <inst>/ --method HEAD --path '/ HTTP/1.1\r\nHost: <inst>\r\n\r\nGET /resources/labheader/js?<script>alert(1)</script>' --pad-path-to 9000` ⇒ 200 + `x-cache: miss` + content-length 8566,body = 嵌套 302 原文;普通 `GET /` → **`x-cache: hit`** 同 body ⇒ 受害者(每 15s)浏览器把 text/html body 当 HTML 解析,执行 Location 里的裸 `<script>alert(1)</script>`。
+  三个新坑:① 垫片必须落**内层 URI 内**(query),`--pad-path-to` 让 `:path` 以内层 URI 结尾即自动落对;嵌套 302 的 Location 逐字回显内层 URI(垫 1 字节长 1 字节),嵌套长须 ≥ M。② `:path` 不得超 HEADERS 帧 16384B(pad 20000 → GOAWAY,易误读成没注入)。③ `tunnel_variant_scan --converge` 在本例**假阴且自坑**:其 clean 直发格先写缓存,后续注入格全成 cache HIT;本例短读回 `500 Communication timed out`(ACL 题才是 `Received only N of expected M`)。④ 毒在缓存时 `banner_verdict` 读不到 is-solved(它 GET / 拿到毒 body),改读未缓存页的 lab header。
+- **stuck** `request-tunnelling/lab-request-smuggling-h2-bypass-access-controls-via-request-tunnelling`(实例 `0ae10020036114ba819c1b4a001100b6`)— `tunnel_variant_scan --outer-path /admin --inner-path /admin --baseline 401` 一刀扫 **flips=[]**:clean 401/2776;path-open → `500 Received only 174 of expected 2776`(记账取到 M=2776);path-closed / -cl0 → 401 且 body 给出内层响应原文(可读内层**要求内层块收尾**,与批47 相反);name 注入 → `400 Invalid request`。把 `X-SSL-VERIFIED: 1`+`X-SSL-CLIENT-CN: administrator` 塞进内层块(收尾)后仍 **401** ⇒ 门=会话角色,隧道**不继承前端信任位**,「隧道继承信任位」整行记死。
+- **stuck** `race-conditions/lab-race-conditions-partial-construction`(实例 `0af3008703f359bc8471ef7100ff00f6`)— prescript 的可见性实验跑了但**被污染**:`/register` 探针自己就是写者(read 侧 sent 153 / DUP 149 / NEW 4;write 侧 20/20 DUP,因为探针已把 `racew1` 建好)⇒ 类分布**不能**判 ①/②。本实例端点事实:NEW=2636B / DUP=3142B;校验顺序 email → 存在性 → INSERT(非法 email 先短路,故无「过存在性却被挡」的非变异档);登录被确认门挡住(未确认 → 200 登录页无 302)⇒ /login 不可探;email 客户端只显示 `@exploit-<id>` 而白名单要 `@ginandjuice.shop` ⇒ **无 token 可读化原语**。附证:注册行提交很快(同波并发后到者已见先到 INSERT)⇒ 假设①(长事务未提交)不像成立。纪律 = **可见性探针必须非变异**(新原子笔记)。
+- **stuck / infra-blocked** `advanced/lab-request-smuggling-0cl-request-smuggling`(实例 `0a450054042817e780fd179b00380068`)— `desync_probe` 20 候选 **suspects=[]**。三格 **0 响应**(`cl-colon-space`/`cl-tab-name`/`cl-lower`)= 前端解析畸变 CL 名并按真 CL 等 body(探针被吃进 body)⇒ 「前端计数」与 0.CL 要求的「前端不计数」相反 ⇒ **H-V 头 holding 前提在本 infra 否证**(跨批 44/47/49/50 稳定)。记 infra-blocked,不再投轮次;建议件面把 `desync_probe` 补三态(answered_probe / first_byte_ms / class,把 0 响应标 `front_hold` 而非"非 suspect")。
+
+纪律/工具面:全部 HTTP 走件;`h2_req --pad-path-to` 是本题的关键 sizing 原语;`race_spread`(1.2.0 已有 `--class` 体长类 oracle)与 `race_send --n`;`desync_probe`(20 候选)。沉淀:四条实录改写(1 solved / 3 stuck,含批50 证据表);新原子笔记 [[h2-tunnel-cache-poison-pad-landing]](连 h2-smuggling-family + solves 实录)与 [[visibility-probe-must-be-non-mutating]](连 race-conditions-family + 实录)。
 

@@ -6,45 +6,39 @@ title: lab-request-smuggling-0cl-request-smuggling
 
 > evidences: [[h2-smuggling-family]]
 
-- 题面:0.CL request smuggling;Carlos 每 5s 开首页,让他执行 `alert()`。
-- 实例(批47):https://0aec00c803f8f74680a076ff00ab0056.web-security-academy.net
-- 判定:**stuck**(第三轮仍未能造出 0.CL 帧;缺整套双 desync 编排)
+- 题面:0.CL request smuggling;Carlos 每 5s 开首页,让他执行 `alert()`。基于 Kettle《HTTP/1.1 Must Die》。
+- 实例(批50):https://0a450054042817e780fd179b00380068.web-security-academy.net
+- 判定:**stuck / infra-blocked**(20 候选零 holding ⇒ H-V 前提在本 infra 否证;停止投轮次)
 
-## 新证据(新实例复核)
+## 20 候选全扫(新实例 `desync_probe <inst>/ --jar <jar>`,判据 = 同连接「该请求 + 探针 GET」响应条数)
 
-1. **畸形头 `Content-Length : N`(冒号前空格)在全新实例上依旧不产生帧长分叉**:一次 write 发 `POST /resources/css/anything`(带 `Content-Length : 92`)+ 紧跟 `GET /404probe` ⇒ 同连接**两条完整响应**(302 `Location: /resources/css/anything/` 130B + 404 `"Not Found"` 244B)⇒ 前后端帧长读法一致(无人 holding),该畸变头不是本实例的 0.CL 原语。与批44 结论一致,**跨实例稳定**。
-2. 复核出的新细节:两条响应的 `Keep-Alive` 都是 **`timeout=10`**(不是 batch 43/44 在 tunnelling 题里见到的 `timeout=0`),且第二条响应带**新的 `Set-Cookie: session=…`** ⇒ 前端按"持久连接上的两条独立请求"处理,确认没有请求被吞。
-3. early-response gadget 仍在:静态目录路径 `/resources/css/anything` 立即回 302(不等 body)。
-4. 首页仍**零 JS、无 exploit-link**;唯一 XSS gadget 仍是 `/post?postId=N` 把 **User-Agent 原样**写进 `<input type="hidden" name="userAgent" value="…">` ⇒ 交付面必须是"把这条响应投给受害者的 `/` 请求"(而非自产 HTML)。
-5. 题面确认设计源:描述直接引用 PortSwigger Research《HTTP/1.1 Must Die》("This lab is based on real-world vulnerabilities discovered by PortSwigger Research"),与在档外部形状(双 desync:stage1 / stage2_chopped+revealed+smuggled)同源。
+| 类 | 候选(响应数 → 状态) |
+| --- | --- |
+| **0 响应(前端按真 CL 等 body ⇒ 探针永不被应答)** | `cl-colon-space`、`cl-tab-name`、`cl-lower` |
+| 1 响应 400 | `cl-dup-diff`、`cl-obs-fold`、`cl-space-val`、`cl-negative`、`cl-hex`、`cl-empty-val` |
+| 1 响应 403(边缘拒) | `cl-plus-te`、`te-plus-cl`、`te-bare`、`te-x`、`te-colon-space`、`te-dup`、`te-obs-fold`、`te-identity`、`te-chunked-case` |
+| 1 响应 200(普通页 8470B) | `cl-plus-sign`、`cl-leading-zero` |
 
-## 未决面
+`suspects = []`。
 
-- 缺的仍是**双 desync 的字节算术**:`stage1` 制造 holding、`stage2_chopped/revealed` 精确切分、再把 `GET /post?postId=8` + `User-Agent: a"/><script>alert(1)</script>` 投到 Carlos 的 `/` 上;本实例并不响应 `Content-Length :`(空格)畸变,所以外部 writeup 的第一跳需要换一个 holding 原语(候选:h2 降级侧 `content-length` 名字畸变、`Transfer-Encoding` 与 CL 并存、obs-fold)。
-- 15 分钟单题上限内无法把整套编排跑通;下一手应先造"holding 探测件"(逐畸变头测同连接响应条数),再谈编排。
+## 判读
 
-## 新证据(批49:desync_probe 十候选全扫)
-
-`desync_probe <inst>/ --jar chrome-jar.json` 逐条试畸变头,判据 = 同一连接上「该请求 + 探针 GET」共收到几条响应:
-
-| 候选                   | 响应数 | 状态                                        |
-| -------------------- | --- | ----------------------------------------- |
-| cl-colon-space       | **0** | 无响应(前端把该畸形 CL 当**真** CL 等 body ⇒ 挂住)     |
-| cl-tab-name          | **0** | 同上                                        |
-| cl-dup-diff          | 1   | 400                                       |
-| cl-plus-te / te-plus-cl / te-bare / te-x | 1 | 403(边缘拒绝)                          |
-| cl-lower             | 1   | 200                                       |
-| cl-obs-fold / cl-space-val | 1 | 400                                   |
-
-⇒ **suspects = []**:本实例上这批畸变都不产生「同一连接多一条响应」的第一跳 desync;`Content-Length : N` 不是 H-V holding 原语,0 响应还说明它会被当成真 CL 吃掉后续字节(与批44/47 conn_reuse 结论一致)。0.CL 的在档形状依赖 H-V 头,该前提在本 infra 不成立 ⇒ 判定仍 **stuck**。
+- 0 响应那三格**不是**"无人 holding",而是**前端解析了畸变 CL 名并按真 CL 等 body**(探针被吃进 body、
+  自己拿不到响应)—— 即"前端计数"。0.CL 要求「前端**不**计数、后端计数」,恰相反 ⇒ **H-V 头 holding
+  前提在本 infra 不成立**(跨批 44/47/49/50 稳定)。
+- `cl-lower`(小写 `content-length`)也是 0 响应,与批49 把 `cl-lower` 记为 1 响应(200)不同 —— 实例间
+  该格行为有漂移,但都不产生 holding。
+- 结论与蒸馏一致:**本 infra 不存在第一跳 0.CL holding 原语**,整套双 desync 编排无米之炊 ⇒ 记
+  infra-blocked,不再投轮次。判据面如要复用,应把 `desync_probe` 的三态(answered_probe / first_byte_ms /
+  class ∈ front_desync|backend_hold|front_hold|normal)补上,把 0 响应单独标成 `front_hold` 而非"非 suspect"。
 
 ## 复现命令
 
 ```
-range_launch launch 4BAD74C3…EFC8CC66 --jar ~/.pi-rs/agent/chrome-jar.json
-conn_reuse "https://<inst>/" --send-str 'POST /resources/css/anything HTTP/1.1\r\nHost: <inst>\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length : 92\r\n\r\nGET /404probe HTTP/1.1\r\nHost: <inst>\r\n\r\n'
+range_launch launch 4BAD74C3…EFC8CC66 --jar <jar>
+desync_probe <inst>/ --jar <jar> --read-ms 2500
 ```
 
 ## 关系
 
-- 族:[[h2-smuggling-family]]、[[request-smuggling-family]];方法见 [[h2-tunnelling-and-h2cl-practice]]。
+- 族:[[h2-smuggling-family]]、[[request-smuggling-family]];方法见 [[h2-tunnelling-and-h2cl-practice]]、[[desync-delivery-deficit-and-window-law]]。

@@ -7,46 +7,51 @@ title: lab-race-conditions-partial-construction
 > evidences: [[race-conditions-family]]
 
 - 题面:Partial construction race;绕邮箱验证建号 → 登录 → 删 carlos。
-- 实例(批48):https://0a30003a0313a847801d49bf00ef0088.web-security-academy.net
-- 状态:**stuck**(读侧播撒件已上,仍零命中 ⇒ "样本不够"这一假设被否证)
+- 实例(批50):https://0af3008703f359bc8471ef7100ff00f6.web-security-academy.net
+- 判定:**stuck**(可见性探针实验已跑,但**探针自身即写者 ⇒ 实验被污染**;token 值面仍是墙)
 
-## 新证据(读侧窗口播撒)
+## 本实例端点事实(批50 实测)
 
-1. **write 侧窗口可达(复证)**:`race_send <inst>/register --a 20`(20 并发同名注册)→ 状态全 200,其中 **4-5 个是新 INSERT**(2636B),其余是重复用户名页(3142B)。
-2. **read 侧播撒(新件 `race_spread`,读侧专用)**:
-   - 第一轮 `--window-ms 3000 --interval-ms 40 --workers 4`:只发出 **12** 个 confirm(全 400)⇒ 实测 `/confirm?token[]=` **每次约 1s**,worker 是串行的 ⇒ 间隔参数不等于采样率,worker 数才是;
-   - 第二轮 `--window-ms 12000 --interval-ms 10 --workers 16`:发出 **151** 个 confirm,窗口覆盖一整轮注册(含 5 个新 INSERT)⇒ **151/151 = 400**,`hits:0`。
-3. **时延侧写**:20 并发 `/register` 整批耗时 **11.5s**(5 个走 INSERT 路径)⇒ 若 INSERT 与 UPDATE 之间夹着慢动作(发确认邮件),窗口应是**秒级**;151 个均匀样本覆盖 12s 仍全 miss。
-4. 累计(批46 齐发 260 + 批48 播撒 151 + 批46 早期 ~70)≈ **480 次**空 token confirm,全部 `400 "Incorrect token: Array"`。
+1. **注册页两值类**:新 INSERT `2636B`(`Please check your emails for your account registration link`);
+   重复用户名 `3142B`(`An account already exists with that username`)。
+2. **校验顺序 = email → 存在性 → INSERT**:`username=probeA`(已存在)+ 非法 email → `Invalid email address`(3119B);
+   `username=probeA` + 合法 email + 1 字符密码 → **DUP(3142B)** ⇒ 密码无校验门。
+   ⇒ 找不到「过存在性检查却因其它校验被挡」的**非变异**探针。
+3. **登录被确认门挡死**:未确认账号 `POST /login`(probeA/pw) → 200 登录页(无 302,body 3801)
+   ⇒ `/login` 不可作可见性探针。
+4. **email 客户端只显示 `@exploit-<id>.exploit-server.net`**(Inbox is empty);而注册白名单要求
+   `@ginandjuice.shop` ⇒ **无 token 可读化原语**(prescript 的 ② pivot 无落点)。
 
-⇒ 结论:**窗口不是"采样不够"的问题**。在秒级窗口上均匀播撒都打不中,只剩两种解释:①INSERT 在显式事务里未提交,半构造行对其它连接不可见(而**同 session 的 confirm 会被 PHP session 锁串行化**,永远排在 register 之后);②token 列默认 NULL(则 `WHERE token = ?` 永不命中 `''`)。两者都不是时序问题,靠加样本无法突破。
+## 可见性实验(按 prescript 跑)
 
-## 未决面/下一步(需要换维度,而不是加样本)
+```
+race_spread <inst>/register --method POST --body 'csrf=…&username=racew1&email=racew1@ginandjuice.shop&password=pw12345678' \
+  --window-ms 12000 --workers 16 --class NEW:2636,DUP:3142 --hit-substr 'already exists' --extra-header 'Cookie: phpsessionid=…'
+race_send <inst>/register --form csrf=… --form username=racew1 … --n 20 --jar <jar>
+```
 
-- 设法**观测半构造行本身**:找能回显用户表的端点(注册后的确认页/账户页),在 register 进行中读一次,直接判定"行是否可见、token 是什么值";这一步能一次性区分①②。
-- 若①成立,唯一出路是让 confirm **与 register 复用同一 DB 连接/事务**(HTTP 层不可达)⇒ 该 lab 在本 infra 结构性不可解;若②成立,则要找"非空但可预测"的半构造值。
-- 件面:`race_spread` 的 `--hit-substr` 与状态分布已是正确判据;`race_send --stagger-ms` 的齐发形保留作对照。
+读数:read 侧 **sent 153 / DUP 149 / NEW 4**;write 侧 20/20 **DUP**。
 
-## 新证据(批49:h2 单写齐发 = 最后的未试维度,仍全 miss)
+**判读(本批关键)**:该实验**被污染** —— `/register` 探针本身就是写者:它的 INSERT 提交后,
+后续探针全看到 DUP。write 侧 20/20 DUP 正是因为 read 侧探针已把 `racew1` 建好。
+⇒ 「DUP 独有串命中」**不能**判 ②(行可见);同理「read 侧全 NEW」也几乎不可能出现。
+**纪律:可见性探针必须是非变异的**(本实例无此端面,/register 做不到)。
 
-`h2_burst`(一条 h2 连接、一次 write、所有请求作为独立 stream 同时到达):
+## 仍在档的正面事实
 
-1. 1 register + 25 `POST /confirm?token[]=`(带 jar)→ register **200/2636**(新 INSERT 成功),25 confirm **全 400 `"Incorrect token: Array"`**;`burst_bytes 3937`。
-2. 同上,但**只有 register 带 `Cookie: phpsessionid=…`**(排除 PHP session 文件锁把 confirm 串行在 register 之后)→ 仍 25×400;`burst_bytes 2645`。
-3. 2 register + 15 confirm(混 `token[]=` / `token[]` / `token=`):`token=` 一律 **403 `"Forbidden"`**(空标量被当「无 token」早挡),`token[]=` 与 `token[]` 一律 400 `Array`,零命中。
-
-⇒ 载荷形状被独立验证是对的(与 writeup 的「token[]= 有效、空标量 token= → Forbidden」完全一致),**问题既不是采样也不是并发模型**:h2 单写齐发已覆盖 register 的整个处理时段,半构造行对**另一条连接/stream**始终不可见 ⇒ 只剩两种解释未排除:(a) INSERT 在未提交事务里,(b) token 列默认值不是 `''` 而 `= ''` 永不命中。累计约 **530 次**空 token confirm 零命中。判定仍 **stuck**(时序维度已彻底用尽,下一步只能换维度观测半构造行本身)。
+- 注册行**提交很快**:同一波并发里,后到的存在性检查已能看到前者的 INSERT(153 探针 149 DUP)。
+  ⇒ 假设①「INSERT 长事务未提交(包住慢发信)」**不像**成立;更像行早早提交,而 `token` 值不是 `''`
+  (NULL 或插入即设)⇒ 绑空串的 `token[]=` 永不可中(累计 ≈530 次零命中,跨 h1 齐发/读侧播撒/h2 单包)。
+- 未决面已收窄为「token 值/可读化」,**不是时序也不是样本量**;本 lab 无该原语 ⇒ 依纪律关闭本题轮次。
 
 ## 复现命令
 
 ```
-range_launch launch 36E4A9EA…1A4E90A9 --jar ~/.pi-rs/agent/chrome-jar.json
-http_session get "https://<inst>/register" --jar <jar> --out /tmp/reg.html     # csrf
-race_spread "https://<inst>/confirm?token[]=" --body '' --method POST --window-ms 12000 --workers 16 --hit-substr 302 --warmup   # 先起读侧(后台)
-race_send "https://<inst>/register" --form csrf=<csrf> --form username=atk2 --form email=atk2@ginandjuice.shop \
-  --form password=pw12345678 --method POST --a 20 --jar ~/.pi-rs/agent/chrome-jar.json                        # 再起写侧
+http_session get <inst>/register --jar <jar> --out /tmp/reg.html            # csrf
+http_session post <inst>/register --form username=probeA --form email=probeA@ginandjuice.shop … # 2636
+http_session post <inst>/register --form username=probeA --form email=x@ginandjuice.shop …     # 3142
 ```
 
 ## 关系
 
-- 族:[[race-conditions-family]];方法侧见 [[http-2-single-packet-race-burst-method]]。
+- 族:[[race-conditions-family]];方法见 [[http-2-single-packet-race-burst-method]]。

