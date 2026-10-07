@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Batch E1 - burp-scanner essential-skills labs"
-description: "Batch E1 (2 burp-scanner labs): 0/2 solved - lab1 surface mapped (stock endpoint = per-string pseudo-stock oracle, traversal/SQLi/cmdi/SSRF/XXE ruled out, net scan 53 probes 0 suspects), lab2 cookie structure cracked (username:token, split on FIRST colon, unknown user -> 500, name field escaped/64 chars) but no privileged renderer found; OOB base verified (oob.dthack.io DNS + :9999 HTTP on ubuntu@47.131.34.33); range_launch needs per-lab --widget-source"
-last_updated: 2026-10-07T20:15:45+08:00
+description: "Re-attack round on targeted-scanning: stock request clean across all seven net-scan families (53 + 33 probes, 0 suspects); corrected the target fact (stock integer is per-instance state, not a per-string hash); pinned net scan v1.5-1.7 defects (full seven-family run never completes -> EAGAIN, patterns need `net intercept off`, glob `*` = scheme+host only, 20s window + timer throttling, image cache blocks the path scan); lab window reset only via /try-again"
+last_updated: 2026-10-07T21:04:09+08:00
 created: 2026-10-07T20:15:45+08:00
 ---
 
@@ -36,4 +36,29 @@ Result: 0/2 solved. Lab 1 unresolved with a mapped-and-ruled-out surface; lab 2 
 ### Open gaps
 - Lab 1: no file-read sink found on any reachable endpoint; the stock endpoint's per-string deterministic integer is unexplained (mock/simulator behaviour) and nothing in the sqli/xss/cmdi/path battery moved it.
 - Lab 2: unknown where the cookie username is stored/rendered for a privileged viewer; no bot callback observed.
+
+
+## 2026-10-07
+
+## Re-attack round (seven-family battery, net scan v1.5+)
+
+Target: lab-discovering-vulnerabilities-quickly-with-targeted-scanning only. Outcome: still unsolved, but the stock request is now clean across **all seven** families and the new desk build's operative bugs are pinned.
+
+### Verdicts
+- `POST /product/stock` pass A (batch E1): `--battery sqli,xss,cmdi,path` -> 53 probes, 21 cookie-unsafe skipped, suspects EMPTY.
+- `POST /product/stock` pass B (this round): `--battery xxe,ssti,ssrf` -> 33 probes, 39 skipped, suspects EMPTY. Template slots now `path:1:product`, `path:2:stock`, `cookie:session`, `form:productId`, `form:storeId`, `pname:new`, `header:Referer`, `header:User-Agent` -> path segments and param names are slots in the new build.
+- Manual SSTI sweep on `productId` (`{{7*7}}`, `{{1337*1337}}`, `${7*7}`, `#{7*7}`, `<%= 7*7 %>`, literal `1337*1337`) -> every value echoed in the JSON 400 `"Invalid product ID: ..."`, no 49 / 1787569 -> no evaluation context.
+- Corrected target fact: the stock integer is **per-instance state**, not a hash of the input. `productId=1&storeId=1` -> 732 on the earlier instance and 32 after relaunch at the same host; arbitrary strings still get values. So the endpoint is a seeded mock/DB lookup, which is why no injection family moves it.
+
+### net scan acceptance findings (desk 1.5.0 -> 1.7.0, cli 1.4.1 -> 1.5.1 during the round)
+- **Full seven-family run never completes**: >5 min wall clock, then `net: reply: Resource temporarily unavailable (os error 11)`. Retry with `--max-probes 120 --budget-ms 110000` still ran past 200s and had to be killed -> the budget flag does not bound total scan time. Narrow passes (2-4 families) finish in ~25-50s and are the workable shape.
+- **Patterns are not auto-released**: the next scan on the same pattern fails with `net: pattern "..." already intercepted`. New op `dbg_cli net intercept off --pattern <P>` clears it (receipt: `remaining_intercepts: []`).
+- **Glob semantics**: `*` covers scheme+host only. `*/product/stock` matches; `*/stock` never matches `/product/stock` (so a rename that only shortens the literal path silently captures nothing). `/image/...` needs `*/image/*`.
+- **20s match window + arm/click race**: start the scan in the background, then click synchronously (a `setTimeout` click from a backgrounded tab may never fire - Chrome throttles timers). Click twice ~8s apart to be sure a request lands inside the window.
+- **Image route needs a cache-bust**: images carry `max-age=3600`, so reloading a listing fires no `/image/...` request; clear via `browser_suite call Network.clearBrowserCache` or switch to an uncached product image. Even then a one-family path pass over the image route ran >150s and was killed - image-path scanning is slow, unresolved.
+- `browser_suite eval` against a stale page throws `Uncaught` (the tab had navigated); re-`goto` before clicking.
+- Lab 1 timer: `range_launch` returns the existing instance without resetting the clock; the only reset is `GET /try-again` while the "Time's up!" page is showing.
+
+### Still open
+- Where the intended file-read primitive lives: not on `/product/stock` (seven families clean), not on `/image/<path>` (traversal 404s at every encoding tried), not on `/filter` (listing alias), no other reachable route in a 40-name wordlist.
 
