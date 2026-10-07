@@ -1,0 +1,6 @@
+[package]
+name = "pi_project_example"
+description = "Project-level lib for rs pieces - shared encoding helpers distilled from marathon pieces"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
