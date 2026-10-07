@@ -40,7 +40,7 @@ fn main() {
         match std::fs::read_to_string(path) {
             Ok(t) => t,
             Err(e) => {
-                pi_rust_lib::report::failure("raw_matrix", format!("read {path}: {e}"), "pass a readable @spec file");
+                pi_rust_lib::report::failure("raw_matrix", &format!("read {path}: {e}"), "pass a readable @spec file");
                 std::process::exit(2);
             }
         }
@@ -50,7 +50,7 @@ fn main() {
     let spec: Value = match pi_rust_lib::serde_json::from_str(&text) {
         Ok(v) => v,
         Err(e) => {
-            pi_rust_lib::report::failure("raw_matrix", format!("spec parse: {e}"), "spec is JSON: {host, variants:[{name,line,headers,body}]}");
+            pi_rust_lib::report::failure("raw_matrix", &format!("spec parse: {e}"), "spec is JSON: {host, variants:[{name,line,headers,body}]}");
             std::process::exit(2);
         }
     };

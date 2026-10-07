@@ -1,47 +1,38 @@
 ---
-title: "lab-race-conditions-partial-construction  [stuck]"
-links:
-  - target: race-conditions-family
-    relation: evidences
+title: lab-race-conditions-partial-construction
 ---
 
-# lab-race-conditions-partial-construction  [stuck]
+# lab-race-conditions-partial-construction
 
 > evidences: [[race-conditions-family]]
 
 - 题面:Partial construction race;绕邮箱验证建号 → 登录 → 删 carlos。
-- 实例(批42R):https://0a6000ca034576b38078303c00c600e8.web-security-academy.net(exploit server 邮箱 `exploit-0a0e005b03f176ad80692fac01d300ce`)
-- 状态:**unresolved**。本批把成文载荷(`token[]=` + 单包齐发)在真单包下跑穿,仍零命中,并把 bind 语义钉死。
+- 实例(批46):https://0a41001c036a6b0182d879ec007500ef.web-security-academy.net(exploit 邮箱 `exploit-0ad60030033e6bb682fc78f00143004a`,客户端 `/email`)
+- 状态:**stuck**(多连接并发件把 4 种延时档位打穿,260 次 confirm 零命中;未决面收窄到"半构造行是否对其它连接可见")
 
-## 实测机制与否证面
+## 新事实(推翻/量化)
 
-1. **单发语义(新增,精确文案)**:`POST /confirm?token[]=` 与 `POST /confirm?token[]` 都回
-   `400 "Incorrect token: Array"`(JSON,24B)= app 把参数数组当**一个** bind 值铺开;
-   `POST /confirm?token[][]=&token[]=` → 500(占位符 1 vs 参数 2)复核成立;
-   `?token=hello` → `"Incorrect token: hello"`;`?token=` → 403 Forbidden。⇒ 半构造值必须等于 `''` 才能被 `WHERE token = ?` 命中。
-2. **真单包也打不中**:h2_burst `single_packet_likely: true`(burst_bytes 1190-1341,8-10 流)下,四种排布全 miss:
-   - `2×/register + 6×/confirm?token[]=`(同 session,jar 注 cookie);
-   - `2×/register(带 Cookie 头) + 8×/confirm?token[]=`(确认腿**不带**任何 cookie,排除 PHP session 锁串行化);
-   - `4×(register,4×confirm)` 交错(每 register 用**新用户名**,保证有 INSERT 窗口);
-   - 大包 `10×register + 50×confirm`(burst_bytes 9277,流序 register 全在前)。
-   累计 ~70 个确认请求,零次非 `Incorrect token`。
-3. **同 session 并发确实存在**:同包 10 个同名 `/register` 中前 5 个成功(2636B),后 5 个拿
-   3142B(重复用户名页)⇒ 竞态窗口对 *register* 可见(前 5 个都过了存在性检查),但对 **confirm 的 SELECT 不可见**。
-4. 因此未决面收窄为:**INSERT 是否在显式事务里未提交**(则半构造行对其它连接不可见),
-   或 **token 列默认不是 `''` 而是 NULL**(则 `= ?` 永不命中)。两条都与"用 `token[]=` 半构造值穿窗口"的成文说法冲突。
+1. **邮箱域名白名单**:注册非 `@ginandjuice.shop` 邮箱 → 页面 `Invalid email address`;只有 `@ginandjuice.shop` 能建号 ⇒ **确认邮件永远读不到**(email client 只显示发给 `*@exploit-…` 的邮件)⇒ 无法用"真 token"做控制实验,只能靠竞态。
+2. **多连接并发件是正确原语**(`race_send --url2 <confirm> --body2 '' --a N --b M --stagger-ms X --no-cookie-b`,每 worker 一条预热连接 + 屏障同放):
+   每轮 10-25 个同名 `/register` 里稳定有 **4-6 个新 INSERT 成功**(200/2636B),其余拿 3142B 重复用户名页 ⇒ **register 的窗口确实可达**(与批42R 的 h2 观测一致)。
+3. **confirm 侧全 miss**:6 轮共 **260 次** `POST /confirm?token[]=`(CL 0、不带 cookie 以排除 PHP session 锁),`--stagger-ms` 取 0 / 60 / 80 / 250 / 350 / 800,burst 10-25 regs × 25-60 confirms,**100% `400 "Incorrect token: Array"`**。
+4. **bind 语义复核**(新实例):`POST /confirm?token[][]=&token[]=` → 500(占位符 1 vs 参数 2)⇒ 数组确实被铺进 bind,`token[]=` 真的跑 `WHERE token = ''`;`?token=` → 403、`?token=hello` → 400 `"Incorrect token: hello"`。
 
-## 未决面(下一手候选)
+## 未决面(收窄为二选一)
 
-- 用 `INSERT` 后立刻读的**同连接**原语验证事务可见性(需要能观测 pending 行的端点,目前没有)。
-- 找能**回显/落日志** token 的端点(把半构造值读出来),或找 `token[]=[]`(空数组)形态:
-  自研 query 解析器下 `token[]=` 得 `[""]`,空数组不可达 —— 若半构造态是 NULL 则该腿封死。
-- 成文写本的"20-40 regs × 50-60 confirms 反复"在本 infra 需真正的多轮循环件(single_packet 预算 ≈1400B 时一轮放不下),
-  本轮未投入新件;下批若续攻应先把"多轮单包 burst 循环"落成件。
+- ① INSERT 在显式事务里未提交(则其它连接的 confirm SELECT 永远看不到半构造行);② token 列默认 NULL(`= ''` 永不命中)。两者都能解释"register 窗口可见、confirm 全 miss"。
+- 下一手候选:把 confirm 从"一个瞬间齐发"改成**在窗口上连续播撒**(现件只能给一个固定 stagger,缺"spread over window"件);或 h2 单包里把 confirm **交错插进** register 之间(批42R 试过 4×(reg,4×conf),未试紧交替)。
 
-## 复现
+## 复现命令
 
 ```
-raw_http "<inst>/" --request-line 'POST /confirm?token[]= HTTP/1.1' --header 'Content-Length: 0'   # 400 "Incorrect token: Array"
-raw_http "<inst>/" --request-line 'POST /confirm?token[][]=&token[]= HTTP/1.1' --header 'Content-Length: 0'  # 500 占位符泄漏
-h2_burst "<inst>/" --req 'POST /register|csrf=..&username=rc20&email=rc20@ginandjuice.shop&password=..|Content-Type: application/x-www-form-urlencoded;;Cookie: phpsessionid=..' --req 'POST /confirm?token[]=' ×N --read-ms 4000
+range_launch launch 36E4A9EA…1A4E90A9 --jar ~/.pi-rs/agent/chrome-jar.json
+http_session get "https://<inst>/register" --jar <jar> --out /tmp/reg.html     # 取 csrf + phpsessionid
+race_send "https://<inst>/register" --form csrf=<csrf> --form username=atk1 --form email=atk1@ginandjuice.shop \
+  --form password=pw12345678 --url2 "https://<inst>/confirm?token[]=" --body2 "" --method POST \
+  --a 10 --b 25 --stagger-ms 60 --no-cookie-b --jar ~/.pi-rs/agent/chrome-jar.json
 ```
+
+## 关系
+
+- 族:[[race-conditions-family]];平台侧见 [[portswigger-platform-specifics]]。

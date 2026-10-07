@@ -279,3 +279,7 @@ h2_req <url> --method HEAD --path /admin \
 ## 走私:TE.TE 实测方向(迁自 request-smuggling-family)
 
 重复 TE 头 `Transfer-Encoding: chunked\r\nTransfer-Encoding: x`:前端取**最后**(`x` 不认 -> 用 CL)、后端取**第一**(chunked)-> 退化成 CL.TE。
+
+## Links
+
+- evidences: [[academy-edge-lab-cookie-gate]]

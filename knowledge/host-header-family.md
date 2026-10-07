@@ -95,3 +95,7 @@ title: Host 头族:鉴权、路由与缓存
 
 - 歧义请求缓存投毒见 [[cache-poisoning-family]];Host 代取内网见 [[ssrf-family]]。
 - 方法论:web-vuln-methods(seed 层,按名引用)。
+
+## Links
+
+- evidences: [[academy-edge-lab-cookie-gate]]

