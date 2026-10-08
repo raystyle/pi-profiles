@@ -33,6 +33,13 @@ call Page.bringToFront → eval hasFocus → true
 page_alert "<79 字符载荷 URL>#x" : 聚焦态前 fired=false ; 聚焦态后 fired=true, alerts:["alert:"]
 ```
 
+## 另一类触发假阴性:`--click` 不滚动目标(首屏外元素)
+
+`page_alert --click` 用 `getBoundingClientRect()`(视口坐标)加 `Input.dispatchMouseEvent` 派发真手势,**不先滚动**。目标在首屏外时点击坐标落在视口外 ⇒ 打空、`fired=false`,而载荷本身没问题。
+
+- 实测(回归批 R2,lab-javascript-url-some-characters-blocked):`.is-linkback a` 在长页底部 ⇒ 直接 `page_alert <url> --click '.is-linkback a'` = `fired=false`(42s 空等);同刻阳性对照(`data:text/html,<a id=t href="javascript:alert%281337%29">go</a>` --click '#t')= `fired=true` ⇒ 管线正常。加 `--driver "document.querySelector('.is-linkback a').scrollIntoView({block:'center'})"` 后立刻 `fired=true, alerts:["alert:Uncaught 1337"]`。
+- 判读纪律:`--click` 后 `fired=false` 时,先把目标滚入视口再判;`fired=false` 本身不是否证。
+
 ## 关系
 
 - 工具面见 [[browse-cdp]];被此坑误判的题见 [[client-side-template-injection-family]](CSP 变体)与 [[dom-xss-family]](web message + javascript: iframe)。

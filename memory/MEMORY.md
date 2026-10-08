@@ -19,3 +19,4 @@
 - [postex_dns_poll Acceptance b27810589](postexdnspoll-acceptance-b27810589.md) 2026-10-08T04:13:25+08:00 -- postex_dns_poll 批自省验收 @b27810589:件面 selftest 6/6 过;发现面半缺 - zvec 引擎下「dns 消费件」「消费件」均不召回新件(仅「postex dns」/exact name 命中)
 - [postex_dns_poll fix-round acceptance 5c31e2978](postexdnspoll-fix-round-acceptance-5c31e2978.md) 2026-10-08T04:28:06+08:00 -- fix 轮 5c31e2978(postex_dns_poll v1.1.0)自省验收 2/2 过: selftest 九断言全绿(含 wire_case/zone_anchor_reject/resend_dedup), 缺 --mailbox 秒败 usage+exit2, 阳性对照(补 mailbox)走帧等待而非 usage
 - [rs_search mirror-header fix acceptance 6b105f78d](rssearch-mirror-header-fix-acceptance-6b105f78d.md) 2026-10-08T04:45:09+08:00 -- 发现面修复批 6b105f78d 自省验收:3/3 过 - 消费件/dns 消费件 召回 postex_dns_poll 均 rank 1;后渗透套件 通道 前 8 中 postex 6 件;同查询连发排名一致且 needsIndex=false/mirror+index mtime 未动
+- [PRS regression batch R2](prs-regression-batch-r2.md) 2026-10-08T08:37:32+08:00 -- 回归批 R2(4 题冷会话重解):4/4 到 congrats,回归过;发现 page_alert --click 不滚动目标导致首屏外元素点击假阴性
