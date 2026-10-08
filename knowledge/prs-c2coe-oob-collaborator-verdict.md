@@ -39,6 +39,19 @@ vuln-families/request-forgery-family.md SSRF 盲面行;与 pi-rs b19 判别器�
 Shellshock 用户名)不翻——需自持 secret 派生标签再轮询读回,见
 [[burp-collaborator-public-polling-method]];批 53 三题均以此收口。
 
+## 机制精确化(批53 后)
+
+「阻断任意外部交互」(b19 判词)过宽,真机制更窄:**域名级出纤白名单**——
+同一 lab 实例同一载荷位,唯一变量 QNAME:oastify 出得去,自有域出不去;
+自建链路本身健康(公网递归可达权威)。待钉死项:纯 DNS 白名单还是 HTTP
+出纤也白名单(判别器:载荷查白名单外知名域)。
+
+## 工作方式裁定(用户,2026-10-08)
+
+**lab 面暂时用 oastify 替代自建回调**(burp_collab 件已支持 new/poll/list);
+自建底座(oob_serve + oob.dthack.io)保留给真实授权目标场景与 postex DNS
+通道的部署验证,不再作为 lab 解题回调面。
+
 ## 边界
 
 - 仅限 lab 判定面:学院靶场的出纤白名单是判定机制,不是通用事实。
