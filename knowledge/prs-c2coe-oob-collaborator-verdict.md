@@ -40,4 +40,4 @@ vuln-families/request-forgery-family.md SSRF 盲面行;与 pi-rs b19 判别器�
 - 真实授权目标的 OOB 仍需自有信道(pi-rs 两条腿:aws deaddrop 47.131.34.33 /
   cf_oob;见 [[oob-callback-family]])。
 - 数据外传题(非纯盲检测)打到边只能过判定,若需**回读外传数据**则随机子域不够
-  -子域不可控即回读面缺;此类题仍结构性受限,除非判定只要「interaction 发生」。
+  (子域不可控即回读面缺);此类题仍结构性受限,除非判定只要「interaction 发生」。
