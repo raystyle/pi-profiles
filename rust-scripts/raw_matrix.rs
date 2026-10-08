@@ -1,9 +1,10 @@
 #!/usr/bin/env rust-script
 //! name: raw_matrix
 //! description: Byte-level request matrix - send N caller-controlled raw HTTP/1.1 requests (each on its own TLS/TCP connection) from one inline/file spec and report per-variant status, bytes, digest, Set-Cookie names, X-Cache/Age/Location, a marker hit and a body snippet, so a whole parsing/cache hypothesis space is provable in ONE envelope.
-//! version: 1.0.1
-//! args: <spec.json|@file|inline-json> [--quiet]
+//! version: 1.1.0
+//! args: <spec.json|@file|inline-json> [--quiet] [--values <a,b,c|@wordlist>]
 //! 用法注(kimi 129 实证):编码/过滤面盘走两段序——先标签面盘(变体=标签集,锚定放行标签),再属性面盘(变体=事件属性集,锚定放行属性);两轮各一次矩阵,不要逐变体单发。
+//! 面盘展开(W2 件化,129 实证 135+115 变体曾全手搓):模板的 line/headers/body 留 {{V}} 槽,--values 给值表(内联逗号表或 @file 每行一值,# 注释行跳过),模板×值表叉乘展开成整张矩阵,单调用覆盖整个面盘。
 //! keywords: raw, http, matrix, request-line, host-header, cache, parsing, ssrf, knife
 //!
 //! ```cargo
@@ -22,12 +23,36 @@ use std::sync::Arc;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--selftest") {
+        let tpl = json!({"name": "t", "line": "GET /?x={{V}} HTTP/1.1", "headers": ["X-T: {{V}}"], "body": "p={{V}}"});
+        let e = expand_sweep(&tpl, "<xss>");
+        let ok = e["line"].as_str().unwrap().contains("<xss>")
+            && e["headers"][0].as_str().unwrap() == "X-T: <xss>"
+            && e["body"].as_str().unwrap() == "p=<xss>"
+            && e["name"].as_str().unwrap() == "t:<xss>";
+        let bare = expand_sweep(&json!({"line": "GET /?{{V}}"}), "onresize");
+        let ok = ok && bare["name"].as_str().unwrap() == "onresize" && !expand_sweep(&json!({"line": "GET /"}), "v").to_string().contains("{{V}}");
+        pi_rust_lib::report::success(
+            "raw_matrix",
+            json!({"selftest": if ok { "ok" } else { "fail" }}),
+            "sweep expansion covers line/headers/body/name",
+        )
+        .unwrap_or(());
+        std::process::exit(if ok { 0 } else { 1 });
+    }
     let mut spec_arg: Option<String> = None;
     let mut quiet = false;
+    let mut values_arg: Option<String> = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--quiet" => quiet = true,
+            "--values" => {
+                i += 1;
+                if i < args.len() {
+                    values_arg = Some(args[i].clone());
+                }
+            }
             other if !other.starts_with("--") && spec_arg.is_none() => spec_arg = Some(other.to_string()),
             _ => {}
         }
@@ -65,6 +90,37 @@ fn main() {
         std::process::exit(2);
     }
     let variants = spec.get("variants").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    // 面盘展开(W2):模板×值表叉乘,{{V}} 槽填值;无 --values 则原样单发。
+    let variants: Vec<Value> = if let Some(va) = &values_arg {
+        let values: Vec<String> = if let Some(path) = va.strip_prefix('@') {
+            match std::fs::read_to_string(path) {
+                Ok(t) => t
+                    .lines()
+                    .map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                    .collect(),
+                Err(e) => {
+                    pi_rust_lib::report::failure("raw_matrix", &format!("read {path}: {e}"), "pass a readable wordlist file");
+                    std::process::exit(2);
+                }
+            }
+        } else {
+            va.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+        };
+        if values.is_empty() {
+            pi_rust_lib::report::failure("raw_matrix", "values list empty", "give inline a,b,c or @file (one per line, # comments skipped)");
+            std::process::exit(2);
+        }
+        let mut out: Vec<Value> = Vec::new();
+        for tpl in &variants {
+            for val in &values {
+                out.push(expand_sweep(tpl, val));
+            }
+        }
+        out
+    } else {
+        variants
+    };
     if variants.is_empty() {
         pi_rust_lib::report::failure("raw_matrix", "spec.variants empty", "add variants: [{name, line, headers:[..], body}]");
         std::process::exit(2);
@@ -208,6 +264,33 @@ fn send(
         .filter_map(|(_, v)| v.trim().split('=').next().map(|n| n.to_string()))
         .collect();
     Ok((status, status_text, head, resp_body, cookies))
+}
+
+/// 把模板变体的 {{V}} 槽填成 sweep 值(line/headers/body 三面),行名带值可辨。
+fn expand_sweep(tpl: &Value, val: &str) -> Value {
+    let mut out = tpl.clone();
+    let sub = |s: &str| s.replace("{{V}}", val);
+    if let Some(line) = out.get("line").and_then(|x| x.as_str()).map(|s| sub(s)) {
+        out["line"] = Value::String(line);
+    }
+    if let Some(hdrs) = out.get("headers").and_then(|x| x.as_array()).cloned() {
+        out["headers"] = Value::Array(
+            hdrs
+                .iter()
+                .map(|h| h.as_str().map(|s| Value::String(sub(s))).unwrap_or_else(|| h.clone()))
+                .collect(),
+        );
+    }
+    if let Some(body) = out.get("body").and_then(|x| x.as_str()).map(|s| sub(s)) {
+        out["body"] = Value::String(body);
+    }
+    let tpl_name = tpl.get("name").and_then(|x| x.as_str()).unwrap_or("");
+    out["name"] = Value::String(if tpl_name.is_empty() {
+        val.to_string()
+    } else {
+        format!("{tpl_name}:{val}")
+    });
+    out
 }
 
 fn digest_of(body: &str) -> u64 {
