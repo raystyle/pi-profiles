@@ -12,7 +12,7 @@ PortSwigger XSS context 题的通用判定/利用模式:先探照射点与编码
 
 ## 存储型 XSS 的利用面
 
-- **执行面**:评论若服务端渲染 into HTML,`<script>` 直接执行;若走 XHR+`innerHTML` 则不执行。先看 `?postId=` 响应里有没有未编码的 `<script>`。 - **解析顺序坑**:评论常排在留言表单之前,脚本在解析期执行时 `document.getElementsByName('csrf')[0]` 还不存在 → 静默失败;要 `window.addEventListener('load',…)`。 - **两类外传**:①同源回传(凭据/cookie POST 成评论,再读回;[[records/lab-capturing-passwords]]、[[records/lab-stealing-cookies]]);②就着 victim 会话干脏活(偷 csrf 改邮箱,[[records/lab-perform-csrf]])。 - **victim 面**:博客评论类 lab 的 victim 会自动浏览评论;只改自己邮箱是偷不到 victim 的。
+- **执行面**:评论若服务端渲染 into HTML,`<script>` 直接执行;若走 XHR+`innerHTML` 则不执行。先看 `?postId=` 响应里有没有未编码的 `<script>`。 - **解析顺序坑**:评论常排在留言表单之前,脚本在解析期执行时 `document.getElementsByName('csrf')[0]` 还不存在 → 静默失败;要 `window.addEventListener('load',…)`。 - **两类外传**:①同源回传(凭据/cookie POST 成评论,再读回;[[records/lab-capturing-passwords]]、[[records/lab-stealing-cookies]]);②就着 victim 会话干脏活(偷 csrf 改邮箱,[[records/lab-perform-csrf]]);③带外 OOB 回传(载荷把凭据/cookie 打到 Collaborator/oastify,本题 stealing-cookies 与 capturing-passwords 实证,kimi G1 补)。 - **victim 面**:博客评论类 lab 的 victim 会自动浏览评论;只改自己邮箱是偷不到 victim 的。
 
 ## 判读纪律
 
