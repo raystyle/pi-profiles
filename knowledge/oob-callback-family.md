@@ -54,7 +54,22 @@ title: oob-callback-family
   `dbms_pipe.receive_message(('a'),5)` 时延载荷 → 1s 内 200(查询真异步,题面不矛盾)→ 只能走 OOB。
 - 官方 Collaborator 公共服 `https://oastify.com/` 本机可直达(200,仅一句说明页,**无公开轮询 API**);
   `burpcollaborator.net` 从本机直接 TLS 失败(UnknownIssuer)。
-- 结论:此类"必须用 Burp Collaborator"的题在本环境属**结构性不可解**,按纪律记 blocked(解除条件:一个可用的 Collaborator 客户端)。
+- 结论(批 30 判词,已被批 53 推翻):“必须用 Burp Collaborator”不等于不可解。**放行的回调面 `*.oastify.com` 本身就是判定面**,
+  自持 secret 的标签可由 [[burp-collaborator-public-polling-method]] 轮询读回。解除条件已达成;详见下节与三条 record。
+
+## 批 53:OOB 判定面的两半(实证)
+
+1. **检测面(到达即判定)**:把回调打向随机 `*.oastify.com` 子域(如 `b53p1a2b.oastify.com`),检测型题
+   (例:OS command injection blind out-of-band)**一枚 DNS 查询即翻 is-solved**——不需要持有子域、不需要 Burp。
+2. **读取面(外传数据)**:外传型题(取 `whoami`/`administrator` 口令)必须**自持 secret 派生标签**再轮询
+   `polling.oastify.com/burpresults?biid=<b64 secret>`,否则数据埋在一个不可轮询的随机标签里。
+   → 件 `burp_collab`;方法与坑见 [[burp-collaborator-public-polling-method]]。
+
+| 面 | 能力 | 判词 |
+| --- | --- | --- |
+| 自建域(`oob.dthack.io`) | lab 侧出站 | 仍**不可达**(b19 双腿判别器:强制 8.8.8.8 亦零命中) |
+| 官方域 `*.oastify.com` | lab 侧出站 | **可达**;检测型题一发即解 |
+| 官方域读取 | 本机出站 | **可达**(`polling.oastify.com`),交互读出即消费 |
 
 ## 实录溯源
 
