@@ -1,6 +1,6 @@
 # Memory Index
 
-- [PRS Lab Campaign](prs-lab-campaign.md) 2026-10-08T11:16:40+08:00 -- 批54:stuck 池三题新杠杆(race 真单包 / burp-scanner JSON+net scan / h2 tunnelling 背端全景)—— 0 新解,环境重度降级(academy edge 间歇整段阻断)
+- [PRS Lab Campaign](prs-lab-campaign.md) 2026-10-08T12:24:04+08:00 -- 批55:stuck 池四题重投(race 单包配对 / h2 隧道背端全景 / targeted-scanning 巡面 / non-standard 登录面)—— 0 新解;race 403=trim 语义、隧道背端不采信客户端证书头(决定性)
 - [pi-rs archive acceptance checks](pi-rs-archive-acceptance-checks.md) 2026-10-06T22:22:16+08:00 -- How to verify the memory-de-seed / knowledge-seed-to-global batch: pty header capture, non-clobber + positive-control recipe, and two mode artifacts
 - [Hunter Chest Acceptance Batch B](hunter-chest-acceptance-batch-b.md) 2026-10-07T10:38:34+08:00 -- Batch B acceptance (tree 376aaf5f7): 5/5 passed - dns_oob live loop recipe, cred_matrix CRLF-template requirement, blind_oracle transport bucket, h2_req arg-parse proof
 - [rs_search Semantic Fix Acceptance](rssearch-semantic-fix-acceptance.md) 2026-10-07T11:15:54+08:00 -- rs_search semantic fix (bf15ef74a) acceptance: 5/5 pass in a fresh process; this session's process predates the fix so its rs_search still returns substring/0; cold-start index refresh verified; no test guards the anchor mapping
@@ -20,3 +20,5 @@
 - [postex_dns_poll fix-round acceptance 5c31e2978](postexdnspoll-fix-round-acceptance-5c31e2978.md) 2026-10-08T04:28:06+08:00 -- fix 轮 5c31e2978(postex_dns_poll v1.1.0)自省验收 2/2 过: selftest 九断言全绿(含 wire_case/zone_anchor_reject/resend_dedup), 缺 --mailbox 秒败 usage+exit2, 阳性对照(补 mailbox)走帧等待而非 usage
 - [rs_search mirror-header fix acceptance 6b105f78d](rssearch-mirror-header-fix-acceptance-6b105f78d.md) 2026-10-08T04:45:09+08:00 -- 发现面修复批 6b105f78d 自省验收:3/3 过 - 消费件/dns 消费件 召回 postex_dns_poll 均 rank 1;后渗透套件 通道 前 8 中 postex 6 件;同查询连发排名一致且 needsIndex=false/mirror+index mtime 未动
 - [PRS regression batch R2](prs-regression-batch-r2.md) 2026-10-08T08:37:32+08:00 -- 回归批 R2(4 题冷会话重解):4/4 到 congrats,回归过;发现 page_alert --click 不滚动目标导致首屏外元素点击假阴性
+- [Vendor batch acceptance 519e5d4d4](vendor-batch-acceptance-519e5d4d4.md) 2026-10-08T11:54:44+08:00 -- vendor 批 519e5d4d4 自省验收 3/3 过:engine=zvec + /proc exe 实测 vendor zg 路径(4 PID 对应 4 查询);发现面 postex_dns_poll/h2_burst 均 rank 1;vendor/zvec-grep+iwe 源树在仓且 target/ 被忽略
+- [iwe bridge batch acceptance bb7e36747](iwe-bridge-batch-acceptance-bb7e36747.md) 2026-10-08T12:32:16+08:00 -- iwe 桥件批验收:1 过(三子命令 1.1.0 全过)、2 过(裸 --root 现秒败 exit2;批核 1.0.0 曾静默吞)、3 过(zvec 不回退,h2_burst/postex_dns_poll rank1);HEAD 会话中由 bb7e36747 推进至 01766d7fc

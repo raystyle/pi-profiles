@@ -48,6 +48,12 @@ h2_req <inst>/ --method POST --path '/ HTTP/1.1\r\nHost: <H>\r\nContent-Type: ap
 h2_req <inst>/ --method GET --path '/admin HTTP/1.1\r\nHost: <H>\r\nX-SSL-VERIFIED: 1\r\nX-SSL-CLIENT-CN: administrator\r\nX-FRONTEND-KEY: <k>\r\nX-Pad: ' --read-ms 5000   # 请求行注入 ⇒ 401
 ```
 
+## 背端全景枚举与决定性否证
+
+- 读通道用于路由枚举(内层原文可读):`/` = 200(8854)、`/login` = 200(3351,普通登录表单)、`/robots.txt` = 404、`/admin` = 401(2776)。背端与前端是同一 app,无独立管理入口。
+- **决定性**:把前端追加块用 `Content-Length` 吸成 body(外层 `GET /admin` 请求行注入 `X-SSL-VERIFIED: 1`+`X-SSL-CLIENT-CN: administrator`+正确 key + `\r\n\r\n` + `Content-Length: 140`),使背端只看到**我们自带的**三行 ⇒ `/admin` 仍 **401/2776** ⇒ 背端**不采信客户端自带的证书/密钥头**,信任位只来自前端追加。
+- 以精确大小写经普通 h2 头(`--hdr2 'X-SSL-VERIFIED||1'`)直打 `/admin` ⇒ 仍 401(重复名不翻转)。走私 `GET /admin/delete?username=carlos`(同形)后横幅仍 not solved。
+
 ## 关系
 
 - 族:[[h2-smuggling-family]];方法见 [[h2-tunnelling-and-h2cl-practice]]、[[h2-frontend-sanitizer-matrix]]。

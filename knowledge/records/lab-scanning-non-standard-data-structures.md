@@ -40,6 +40,11 @@ raw_matrix @cookie-battery.json   # username/token 两半的注入矩阵(见上�
 form_sweep <inst>/my-account/change-email email 'x@x.com,…,x@x.com|id' --field csrf=… --jar j   # 只存不判,全 302
 ```
 
+## 表面巡面增量
+
+- 以 `wiener:peter` 登录后 `/my-account?id=wiener` 只有 change-email 表单(无内联脚本);会话 cookie 仍是 `<username>%3a<32 位 token>`(匿名 `%3a<token>`、登录后 `wiener%3am0J9…`)。除 cookie 外无其它「非标准结构」承载面(评论 name/website/email 全转义)。
+- `dbg_cli net scan` 电池本批未落地(需先 attach + net intercept 捕模板)。
+
 ## 关系
 
 - 族:[[web-vuln-methods]];姊妹题 [[lab-discovering-vulnerabilities-quickly-with-targeted-scanning]];应用形状见 [[portswigger-burp-scanner-essential-skills-labs-app-shapes-and-traps]]。

@@ -29,6 +29,14 @@ title: lab-race-conditions-partial-construction
 - 未决面:被后置写入的列是哪一列、其窗口内可匹配形态;需要一个**非变异、能区分半构造行**的读原语(该 lab 的 HTTP 面目前没有)。
 - 复攻建议:换维度(能回显用户表的端点/错误码差分),不再加采样、不再换并发模型。
 
+## 校验边界与附加否证
+
+- **POST /confirm 的 403 是 PHP `trim()` 语义**:`token=` / `%20` / `+` / `%09` / `%0b` / `%0c` / `%20%20%20` 全 403;而 **`%C2%A0`(NBSP)/`%E2%80%80`(em-space)过检**并进入查询(400 `Incorrect token: <原样>`)。⇒ 非 ASCII 空白可控到 bind,但 MySQL 不把 NBSP 当空串 ⇒ 对空 token 半行仍无匹配。
+- **GET /confirm 惰性**:`GET /confirm?token=<任意/空/NBSP/数组>` 一律 200/2839(只渲染);竞态并发 GET 确认后账号仍不可登录 ⇒ GET 不执行确认。
+- **login 只认 username**:用 email 当 username(同 session+csrf)与用 username 同为 200/3801。
+- 真单包 **配对矩阵**(3 register + 3 login,6 条独立 session,`single_packet_likely=true`)⇒ 3 注册 2636、3 登录 3801;占位 token(0/1/a/admin/null/NULL/<用户名>/undefined)单包并发 confirm 全 400。
+- email 客户端只显示 `@exploit-…` 域(`Displaying all emails @…`),@ginandjuice.shop 邮件不可读。
+
 ## 关系
 
 - 族:[[race-conditions-family]];方法见 [[http-2-single-packet-race-burst-method]]、[[visibility-probe-must-be-non-mutating]]。

@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Lab Campaign"
-description: "批54:stuck 池三题新杠杆(race 真单包 / burp-scanner JSON+net scan / h2 tunnelling 背端全景)—— 0 新解,环境重度降级(academy edge 间歇整段阻断)"
-last_updated: 2026-10-08T11:16:40+08:00
+description: "批55:stuck 池四题重投(race 单包配对 / h2 隧道背端全景 / targeted-scanning 巡面 / non-standard 登录面)—— 0 新解;race 403=trim 语义、隧道背端不采信客户端证书头(决定性)"
+last_updated: 2026-10-08T12:24:04+08:00
 created: 2026-10-06T22:18:05+08:00
 ---
 
@@ -276,4 +276,20 @@ Batch 50(4 stuck 攻击批 · pH 三工作台蒸馏处方落地后首攻):**1 so
 - **burp-scanner 两题(#2a targeted-scanning / #2b non-standard,stuck)**:#2a 取得确认性新证据 —— `/product/stock` 的 **JSON 体**(`application/json` 的 `{"productId":"1","storeId":"1"}` 与穿通形)一律 400 `"No such product or store"` ⇒ 该端点**只解析 urlencoded**、不解析 JSON(与 XML 同);storeId 扫 `/etc/passwd,1|cat …, $(cat …), file://…, php://filter…, ../../../../etc/passwd` 全 200 且回 2-3 位数字(纯串→数 mock)。#2b 未取新证据(实例死)。两题的 `dbg_cli net scan` 均未落地。
 - **环境面(本批最大阻碍)**:`*.web-security-academy.net`(全部同一对 edge IP `34.246.129.62`/`79.125.84.16`)被沙箱出口**间歇整段阻断**(连接重置 / 连接超时 / status-line 超时),`portswigger.net` 亦间歇受累;健康窗口仅数十秒,长退避(2-4 分钟)后可短暂恢复;实例寿命被拉短(数分钟即 504)。多数 round 消耗在等网络恢复。
 - 工具面:`h2_burst`(`single_packet_likely` 判真单包)、`h2_req`(隧道注入 + 泄漏)、`raw_matrix`(形态矩阵)、`range_launch --widget-source`、`json_pick`/`text_grep`。教训:**并行多连接触发该 edge 重置,应逐条单发**;实例 40 分钟寿命不稳,开工即测可达、死即重 launch。
+
+
+## 2026-10-08
+
+## 批55 stuck 池四题重投 —— 0 新解,三题定死、一题未落地
+
+四实例 `range_launch`(全部换新域名)。未读题解、未 git 提交。网络本轮健康(只有实例寿命问题:旧实例全 504)。
+
+- **race-conditions/lab-race-conditions-partial-construction(#1)** 单包配对矩阵仍否证。
+  新证:**`POST /confirm` 的 403 是 PHP `trim()` 语义** —— `token=`/`%20`/`+`/`%09`/`%0b`/`%0c` 全 403,而 **`%C2%A0`(NBSP)/`%E2%80%80`(em-space)过检**进查询(400 `Incorrect token:`);`GET /confirm` 惰性(任意 token 均 200/2839,竞态并发 GET 后仍不可登录);login 只认 username(email 当 username 亦 3801);真单包 3×(register+login)6 条独立 session ⇒ 3×2636/3×3801 零差分;占位 token 单包并发全 400。email 客户端只显示 `@exploit-…` 域。
+- **h2 tunnelling ACL(#3)** 读通道做背端全景 + **决定性否证**。
+  路由:内层 `/`=200(8854)、`/login`=200(3351)、`/robots.txt`=404、`/admin`=401(2776);背端=同一 app。密钥泄漏原语复证(本实例 key `942348097`)。
+  **决定性**:用 `Content-Length` 把前端追加块吸成 body,使背端只看到我们自带的 `X-SSL-VERIFIED:1`+`X-SSL-CLIENT-CN:administrator`+正确 key ⇒ `/admin` 仍 **401** ⇒ 背端**不采信客户端自带的证书/密钥头**;普通 h2 头(精确大小写)直打亦 401;走私 `GET /admin/delete?username=carlos` 未翻横幅。信任位伪造/借用不可达。
+- **targeted-scanning(#2)** 巡面无反射面:首页仅 20 个 product 链接 + 计时器,无搜索/评论/反馈;端点巡只 `/filter`(200)+`/product/stock`(GET 405),余 404;JSON/XML 体 400、storeId file/命令载荷全回数字;`stockCheckPayload.js` 只定义 `contentType`+URLSearchParams。
+- **non-standard(#2b)** 以 wiener:peter 登录后 `/my-account` 只有 change-email 表单(无内联脚本),cookie 仍 `<username>%3a<token>`;`dbg_cli net scan` 未落地。
+- 工具面:`h2_burst`(真单包配对矩阵)、`h2_req`(`--hdr2`/`:path` 注入、CL 吸块)、`raw_matrix`(403 边界/端点巡)、`form_sweep`、`banner_verdict`、`http_session`(登录带 jar,本轮未挂)。教训:`h2_req` 的 `responses[].body` 在未收尾内层时=内层原始响应。
 
