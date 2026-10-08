@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Lab Campaign"
-description: "批53:OOB 族 blocked 4 题全解 - 判定在到达 oastify 权威层(假设证实);外传型另需自持 secret 派生标签 + 轮询 polling.oastify.com 读回;新件 burp_collab,header_scan v1.1.0 加常量头"
-last_updated: 2026-10-08T09:50:47+08:00
+description: "批54:stuck 池三题新杠杆(race 真单包 / burp-scanner JSON+net scan / h2 tunnelling 背端全景)—— 0 新解,环境重度降级(academy edge 间歇整段阻断)"
+last_updated: 2026-10-08T11:16:40+08:00
 created: 2026-10-06T22:18:05+08:00
 ---
 
@@ -257,4 +257,23 @@ Batch 50(4 stuck 攻击批 · pH 三工作台蒸馏处方落地后首攻):**1 so
   本机 getent 对随机 oastify 子域偶发瞬时 NXDOMAIN,不能据此判标签无效。cookie 值不能含 `;`(故题3 选 UTL_INADDR 形而非 XXE 形)。
 - 知识回写:4 条 record 改写为 solved 终态;新增 `burp-collaborator-public-polling-method`;`oob-callback-family` 与
   `prs-c2coe-oob-collaborator-verdict` 补"两半:到达即判定 / 自持标签可读回",旧「结构性不可解」判词已推翻。
+
+
+## 2026-10-08
+
+## 批54 stuck 池三题新杠杆 —— 0 新解,环境重度降级
+
+开工:四实例 `range_launch`(`page_read` 取 lab_id;burp-scanner 两题需 `--widget-source <题页路径>`;jar 先 `cp /tmp/cj1.json`)。官方 solution 块未读。未 git 提交。
+
+- **race-conditions/lab-race-conditions-partial-construction(#1,stuck)** 新杠杆=真单包。
+  `/resources/static/users.js`:`createRegistrationForm()`(csrf/username/email/password)、`confirmEmail()` 把 URL query 原样拼成 `POST /confirm?<query>`;csrf 会话级且 `/login` **强制 csrf** ⇒ 每腿需独立 session+csrf。
+  `h2_burst` **真单包**(6 条独立 session)1 register + 5-8 login(`single_packet_likely=true`)⇒ register 200/2636、**login 全 200/3801 零 302**;真单包 1 register+6× `token[]=` ⇒ confirm **全 400 "Incorrect token: Array"**;`token=0/1/null/undefined` 亦全 400;空 password→400 "Missing parameter"、空 token→403;`/confirm` **只认 query**(body 被忽略)。
+  ⇒ 半构造 token 非 `''` 非 `0/1`,login 窗口不成立 —— **时序维度彻底用尽**。
+- **h2 tunnelling ACL(#3,stuck)** 新杠杆=背端全景 + 密钥泄漏。
+  **新原语**:外层 `POST /` + `:path` 内未闭合 `search=`、`Content-Length`=块长 ⇒ 前端追加头块成为 body、搜索页原样回显 ⇒ **X-FRONTEND-KEY 可读**(本实例 `071876143`);块顺序 `Host / X-SSL-VERIFIED: 0 / X-SSL-CLIENT-CN: null / X-FRONTEND-KEY`。
+  但请求行注入**精确名** `X-SSL-VERIFIED: 1`+`X-SSL-CLIENT-CN: administrator`+正确 key 直打 `/admin` ⇒ 仍 **401**;内层块同形、以 `Content-Length` 吸追加块 ⇒ 仍 **401** ⇒ 同名信任头取**后出现者**且/或 `/admin` 判据是会话角色;**伪造/借用信任位整行记死**。
+  读通道确认:外层 `HEAD /admin` + **未收尾**内层 `GET /` ⇒ h2 流的 status/headers 是外层的(401/2776)、**body 是内层原始响应**(200 首页全文,`Content-Length: 8854`)⇒ 内层响应**可读**(内层块必须不收尾;收尾则只回外层)。
+- **burp-scanner 两题(#2a targeted-scanning / #2b non-standard,stuck)**:#2a 取得确认性新证据 —— `/product/stock` 的 **JSON 体**(`application/json` 的 `{"productId":"1","storeId":"1"}` 与穿通形)一律 400 `"No such product or store"` ⇒ 该端点**只解析 urlencoded**、不解析 JSON(与 XML 同);storeId 扫 `/etc/passwd,1|cat …, $(cat …), file://…, php://filter…, ../../../../etc/passwd` 全 200 且回 2-3 位数字(纯串→数 mock)。#2b 未取新证据(实例死)。两题的 `dbg_cli net scan` 均未落地。
+- **环境面(本批最大阻碍)**:`*.web-security-academy.net`(全部同一对 edge IP `34.246.129.62`/`79.125.84.16`)被沙箱出口**间歇整段阻断**(连接重置 / 连接超时 / status-line 超时),`portswigger.net` 亦间歇受累;健康窗口仅数十秒,长退避(2-4 分钟)后可短暂恢复;实例寿命被拉短(数分钟即 504)。多数 round 消耗在等网络恢复。
+- 工具面:`h2_burst`(`single_packet_likely` 判真单包)、`h2_req`(隧道注入 + 泄漏)、`raw_matrix`(形态矩阵)、`range_launch --widget-source`、`json_pick`/`text_grep`。教训:**并行多连接触发该 edge 重置,应逐条单发**;实例 40 分钟寿命不稳,开工即测可达、死即重 launch。
 

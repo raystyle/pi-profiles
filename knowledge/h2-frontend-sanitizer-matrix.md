@@ -39,3 +39,9 @@ Academy 的 h2 前端(h2→h1 降级)在 request tunnelling 题里**每个注入
   X-SSL-* 类前端追加头不落进可见 body(M 与交付长的差里也读不到)⇒ 信任位
   来路不能靠回显判定,只能用状态/长度分叉;X-SSL-* 的合法来路是 TLS 层,
   HTTP 客户端不可得 ⇒ 该凭据行记死,不再磨头名变形。
+
+## 追加头块可整体泄漏(密钥可读)
+
+前端追加块的原文与顺序可用「外层 `POST /` + `search=` 未闭合体」读出,搜索页把 body 原样回显:
+`\r\nHost: <authority>\r\nX-SSL-VERIFIED: 0\r\nX-SSL-CLIENT-CN: null\r\nX-FRONTEND-KEY: <9 位>\r\n\r\n`。
+⇒ 信任位密钥**可泄漏**(每实例变),但这没翻门:同名信任头取**后出现者**(前端追加的 0/null),且 `/admin` 的判据在客户端可自带头之外 ⇒ 泄漏密钥 + 请求行注入精确名 + Content-Length 吸追加块,三法都仍 401。信任位伪造/借用整行记死。

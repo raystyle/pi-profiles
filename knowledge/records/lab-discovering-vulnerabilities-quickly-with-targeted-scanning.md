@@ -35,6 +35,7 @@ title: lab-discovering-vulnerabilities-quickly-with-targeted-scanning
 
 - 10 分钟到点后**所有**路由回 `Time's up!`;`GET /try-again` -> 302 `/` 重启时钟。
 - 到点前后实例曾整体不可达约 5 分钟(全请求挂死)后自愈 ⇒ 与「阻塞型 sink 拖死 worker」不可区分,记死为**混杂证据**,不得当注入证据。
+- JSON 体亦试过(批54):`Content-Type: application/json` 的 `{"productId":"1","storeId":"1"}` 与 `{"...":"/etc/passwd"}` 都落 `400 "No such product or store"` ⇒ 该端点**只解析 urlencoded**;storeId 扫 `/etc/passwd,1|cat …, $(cat …), file://…, php://filter…, ../../../../etc/passwd` 全部 200 且回 2-3 位数字(纯串→数 mock,无文件读/无命令注入)。
 
 ## 复现命令
 
