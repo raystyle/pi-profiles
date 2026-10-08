@@ -20,6 +20,7 @@ title: lab-race-conditions-partial-construction
 6. **存在性检查是 TOCTOU**:同一用户名 8 个并发 `POST /register` -> **4× 2636(新 INSERT)+ 4× 3142(DUP)**。
 7. **读侧播撒失败**:4 worker × 25ms × 9s 对 `POST /confirm?token[]=` 只发出 36 条(全 400),期间前台并发 4 个注册窗口 -> `hits=0`。
 8. **可见性探针纪律**(批50 立,批51 复核):`/register` 自身即写者,不能当可见性探针;`/login` 被确认门挡、`/confirm` 只泄查询形态 ⇒ 该 lab 的 HTTP 层**没有**非变异读路径(见 [[visibility-probe-must-be-non-mutating]])。
+9. **login 腿做观测原语也不成立**(批52):带合法 csrf + 目标用户名/注册密码的 `POST /login` 以 4 worker × 25ms 在 9s 窗口内播撒(30 条),窗口内并发 8 个同名注册(4 新 INSERT + 4 DUP)⇒ **30/30 全部 200(3801B 固定页),零差分**;且该响应不区分「用户不存在」与「已注册未确认」(两者都是同一 3801B),login 对半构造行**无观测能力**。
 
 ## 判读与下一步
 

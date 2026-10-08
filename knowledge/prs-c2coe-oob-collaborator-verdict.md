@@ -10,7 +10,7 @@ vuln-families/request-forgery-family.md SSRF 盲面行;与 pi-rs b19 判别器�
 
 ## 判定真相(两半)
 
-1. pi-rs 侧实证(b19 判别器):lab 出纤防火墙阻断任意外部交互——强制 8.8.8.8 与
+1. pi-rs 侧实证(b19 判别器):lab 出纤防火墙阻断任意外部交互-强制 8.8.8.8 与
    内置解析器对自有域(oob.dthack.io)双零 + 题面自述 => **仅放行 oastify /
    burpcollaborator 域**(Collaborator 官方域)。
 2. prs_c2coe 侧实证(98 号件):**解题条件 = 打到 Collaborator 边即解**。随机子域
@@ -31,7 +31,7 @@ vuln-families/request-forgery-family.md SSRF 盲面行;与 pi-rs b19 判别器�
 - /web-security/sql-injection/blind/lab-out-of-band-data-exfiltration
 - (同族任意 OOB 判定型)
 
-验证状态:[假设] 机制由两仓实证拼接推演,单点待实测——一发 `xxx.oastify.com`
+验证状态:[假设] 机制由两仓实证拼接推演,单点待实测-一发 `xxx.oastify.com`
 子域查询后读 lab 状态文本翻不翻 solved。
 
 ## 边界
@@ -40,4 +40,4 @@ vuln-families/request-forgery-family.md SSRF 盲面行;与 pi-rs b19 判别器�
 - 真实授权目标的 OOB 仍需自有信道(pi-rs 两条腿:aws deaddrop 47.131.34.33 /
   cf_oob;见 [[oob-callback-family]])。
 - 数据外传题(非纯盲检测)打到边只能过判定,若需**回读外传数据**则随机子域不够
-  ——子域不可控即回读面缺;此类题仍结构性受限,除非判定只要「interaction 发生」。
+  -子域不可控即回读面缺;此类题仍结构性受限,除非判定只要「interaction 发生」。

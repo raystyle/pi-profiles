@@ -23,6 +23,7 @@ title: lab-scanning-non-standard-data-structures
 3. **token 半是精确匹配**:`<tok>' OR '1'='1` / `' OR 1=1-- -` -> /admin 401、/my-account 302(未登录);token 截断 8 位、大写化 -> 302 ⇒ 无前缀/大小写宽容。
 4. **重复 session cookie:后一个生效**(`session=administrator:<tok>; session=wiener:<tok>` -> 200 正常 wiener 会话;反序 -> 500),无 split-brain。
 5. **cookie 里塞第三个冒号**(`wiener%3a<tok>%3aadministrator`)-> 401(= 未登录),无越权。
+6. **无规范形窗口**(批52 证伪):token 保持不变、username 半逐变形——原样/编码空格(`wiener `、`%20`、`+`)、原样/编码制表(`\t`、`%09`)、`%0b`、大小写(`WIENER`/`Wiener`)、前导空格、`wiener--`、`wiener%00`——**全部** 500 且 digest 全同(aa136edf6af38e3e);token 半尾随空格/大写/截尾 -> 302 ⇒ 两半比对都是**逐字节精确**,既无 trim 也无大小写/注释容忍,不存在「比对用规范形、SQL 见原始串」的入口。
 
 ## 其余插入点
 

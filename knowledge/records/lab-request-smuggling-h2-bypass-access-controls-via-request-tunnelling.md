@@ -29,6 +29,8 @@ title: lab-request-smuggling-h2-bypass-access-controls-via-request-tunnelling
 
 - 内层块塞 `X-SSL-VERIFIED: 1` + `X-SSL-CLIENT-CN: administrator`(收尾形)-> 内层 **401**(2776)。批51 追加泄漏出的 `X-FRONTEND-KEY: 678833581` -> 仍 **401**。
 - 头名伪装(名字带尾随空格,前端当新名放行、后端归一化)直达 /admin -> **401** ⇒ 后端不采信客户端自带的证书头(前端追加的 `X-SSL-VERIFIED: 0` / `X-SSL-CLIENT-CN: null` 生效或同名头被合并)。
+- **内层块里的空格头名同样无效**(批52):内嵌 `GET /admin` 写 `X-SSL-VERIFIED : 1` + `X-SSL-CLIENT-CN : administrator` -> 内层 **401**(2776)⇒ 内层不可能被“精确名消毒器”剥掉再归一化,前端不对走私字节做名字过滤。
+- **动作端点不在“只看页面 401”的例外里**(批52):内嵌 `GET /admin/delete?username=carlos`(全 X-SSL 头 + `X-FRONTEND-KEY`)-> 内层 **401**(2866B),事后横幅仍 is-solved=false ⇒ `/admin/delete` 自己重做角色门,carlos 未被删;不存在“页门严、动作端点松”的缝。
 - 结论**记死**:隧道只原样搬字节,借不来前端的信任位;`:path` CRLF 是唯一注入面,而到达后端的请求自带不了角色。
 
 ## 仍在档的正面前端事实
