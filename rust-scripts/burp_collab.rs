@@ -1,7 +1,7 @@
 #!/usr/bin/env rust-script
 //! name: burp_collab
-//! description: Burp Collaborator 公共服客户端(OOB 读取面) - 自持 secret 派生 <label>.oastify.com 载荷,轮询 polling.oastify.com/burpresults?biid=<b64 secret> 取回交互(DNS/HTTP),补上"回调到达即判定、但外传数据不可读"的缺口;交互读出即消费。合法授权测试用途。
-//! version: 1.0.0
+//! description: Burp Collaborator 公共服客户端(OOB 读取面) - 自持 secret 派生 <label>.oastify.com 载荷,轮询 polling.oastify.com/burpresults?biid=<b64 secret> 取回交互(DNS/HTTP),补上"回调到达即判定、但外传数据不可读"的缺口;交互读出即消费。信道选型律(kimi G3 跨题=2):外传优先路径/DNS 标签明文(免复制免解码,题 145/146 实证),body 信道有丢字符风险须核 content_length_check。合法授权测试用途。
+//! version: 1.0.1
 //! args: <new|poll|list> [--custom S] [--state FILE] [--biid B64] [--server DOMAIN] [--poll-host HOST] [--json] [--selftest]
 //! keywords: oob, burp, collaborator, oastify, oast, dns, exfil, ssrf, 漏洞猎手套件
 //!
@@ -175,11 +175,24 @@ fn poll(server: &str, biid: &str) -> Result<Value, String> {
         .set("User-Agent", "pi-rs-burp_collab/1.0")
         .call()
         .map_err(|e| format!("poll {url}: {e}"))?;
+    let declared = resp.header("Content-Length").and_then(|v| v.parse::<usize>().ok());
     let body = resp.into_string().map_err(|e| format!("read body: {e}"))?;
+    // G2(kimi,题 146 实证):body 信道丢字符的守门旗标——声明长与实收长
+    // 不一致即标 mismatch,调用方见 mismatch 不硬读凭据。
+    let check = match declared {
+        Some(d) if d == body.len() => "ok",
+        Some(_) => "mismatch",
+        None => "absent",
+    };
     if body.trim().is_empty() {
-        return Ok(json!({"responses": []}));
+        return Ok(json!({"responses": [], "content_length_check": check}));
     }
-    serde_json::from_str(&body).map_err(|e| format!("parse response: {e} :: {}", &body[..body.len().min(200)]))
+    let mut v: Value = serde_json::from_str(&body)
+        .map_err(|e| format!("parse response: {e} :: {}", &body[..body.len().min(200)]))?;
+    if let Some(obj) = v.as_object_mut() {
+        obj.insert("content_length_check".to_string(), json!(check));
+    }
+    Ok(v)
 }
 
 fn resolve_ok(name: &str) -> bool {

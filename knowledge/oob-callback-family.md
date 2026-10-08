@@ -77,5 +77,6 @@ title: oob-callback-family
 
 ## 相关族
 
+- **信道选型律(kimi G3,跨题=2:题 145/146)**:外传数据优先路径/DNS 标签明文(免复制免解码,DNS 标签一次全须全尾);body/b64 信道有丢字符风险,读取须核 content_length_check(burp_collab 1.0.1 旗标)。
 - 盲注入 oracle 信道见 [[blind-injection-family]];SSRF 盲面见 [[ssrf-family]]。
 - 方法论:web-vuln-methods(seed 层,按名引用)。
