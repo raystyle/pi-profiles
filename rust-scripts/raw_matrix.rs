@@ -1,8 +1,9 @@
 #!/usr/bin/env rust-script
 //! name: raw_matrix
 //! description: Byte-level request matrix - send N caller-controlled raw HTTP/1.1 requests (each on its own TLS/TCP connection) from one inline/file spec and report per-variant status, bytes, digest, Set-Cookie names, X-Cache/Age/Location, a marker hit and a body snippet, so a whole parsing/cache hypothesis space is provable in ONE envelope.
-//! version: 1.0.0
+//! version: 1.0.1
 //! args: <spec.json|@file|inline-json> [--quiet]
+//! 用法注(kimi 129 实证):编码/过滤面盘走两段序——先标签面盘(变体=标签集,锚定放行标签),再属性面盘(变体=事件属性集,锚定放行属性);两轮各一次矩阵,不要逐变体单发。
 //! keywords: raw, http, matrix, request-line, host-header, cache, parsing, ssrf, knife
 //!
 //! ```cargo
