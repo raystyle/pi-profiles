@@ -1,6 +1,6 @@
 # Memory Index
 
-- [PRS Lab Campaign](prs-lab-campaign.md) 2026-10-08T08:18:23+08:00 -- 批51 stuck 池复攻:4 题全 stuck 但各得新证据(cookie 500=mismatch 纠正、confirm 空 token 被 403 证伪、隧道路径证伪信任位伪造)+ http_session 偶发挂死改用 http_dump/raw_matrix 的环境教训
+- [PRS Lab Campaign](prs-lab-campaign.md) 2026-10-08T09:08:49+08:00 -- 批52:4 题四个新假设全部干净证伪(productId 反射非 XSS、cookie 无规范形窗口、login 腿无观测能力、隧道空格头名与动作端点仍 401)
 - [pi-rs archive acceptance checks](pi-rs-archive-acceptance-checks.md) 2026-10-06T22:22:16+08:00 -- How to verify the memory-de-seed / knowledge-seed-to-global batch: pty header capture, non-clobber + positive-control recipe, and two mode artifacts
 - [Hunter Chest Acceptance Batch B](hunter-chest-acceptance-batch-b.md) 2026-10-07T10:38:34+08:00 -- Batch B acceptance (tree 376aaf5f7): 5/5 passed - dns_oob live loop recipe, cred_matrix CRLF-template requirement, blind_oracle transport bucket, h2_req arg-parse proof
 - [rs_search Semantic Fix Acceptance](rssearch-semantic-fix-acceptance.md) 2026-10-07T11:15:54+08:00 -- rs_search semantic fix (bf15ef74a) acceptance: 5/5 pass in a fresh process; this session's process predates the fix so its rs_search still returns substring/0; cold-start index refresh verified; no test guards the anchor mapping

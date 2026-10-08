@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Lab Campaign"
-description: "批51 stuck 池复攻:4 题全 stuck 但各得新证据(cookie 500=mismatch 纠正、confirm 空 token 被 403 证伪、隧道路径证伪信任位伪造)+ http_session 偶发挂死改用 http_dump/raw_matrix 的环境教训"
-last_updated: 2026-10-08T08:18:23+08:00
+description: "批52:4 题四个新假设全部干净证伪(productId 反射非 XSS、cookie 无规范形窗口、login 腿无观测能力、隧道空格头名与动作端点仍 401)"
+last_updated: 2026-10-08T09:08:49+08:00
 created: 2026-10-06T22:18:05+08:00
 ---
 
@@ -217,4 +217,20 @@ Batch 50(4 stuck 攻击批 · pH 三工作台蒸馏处方落地后首攻):**1 so
 - lab 实例有寿命:批51 里 lab3/lab4 的实例在 ~40 分钟后变 504 Gateway Timeout,需重新 range_launch(会换新域名);同 lab 重复 range_launch 通常回同一实例(即使已挂死),要等 PortSwigger 回收。
 - raw_matrix 的 spec 里 Content-Length 必须自己算准:少 1 字节会让服务端等字节 -> 500/timeout,本轮两次误判都源于此(已修正计数)。
 - `/try-again` 是这套带计时器 lab 的重置入口(10 分钟窗口)。
+
+
+## 2026-10-08
+
+## 批52 stuck 池新假设再攻(4 题,progress 114/5/4 → 0 新解)
+
+每题都是「从未试过的组合」,结论全是**假设被干净证伪**(无解但面变窄):
+
+- **targeted-scanning(#1)**:productId 半 = 严格整数校验,两条 400 分支(回显分支 `"Invalid product ID: <原样>"` 收 `1'`/`1"`/`1;id`/`1.0`/`1 `,**未转义**进 `application/json`;固定分支 `"No such product or store"` 收所有含 `<`/`>` 的载荷、`0`、`UNION` 形)⇒ 反射面**不构成 XSS**;SSRF 形 storeId(`http://127.0.0.1/`、黑洞 `10.255.255.1:81`、`file:///etc/passwd`)全部瞬时返回 mock 数字、无时延 ⇒ mock 是纯字符串函数、不出网。/filter 是无参数静态页。
+- **non-standard-data-structures(#2)**:规范形窗口**证伪** —— token 不变、username 半 12 种变形(原样/编码空格、`+`、原样/编码 tab、`%0b`、大小写、前导空格、`--`、`%00`)全 500 同 digest;token 半 3 种(尾空格/大写/截尾)全 302 ⇒ 两半都是逐字节精确比对,无 trim/大小写/注释容忍。
+- **partial-construction(#3)**:换观测原语打 **login 腿**也**证伪** —— 合法 csrf + 目标用户名/注册密码的 `POST /login` 4 worker×25ms 播撒 9s(30 条)配 8 个并发同名注册(4 新 INSERT)⇒ 30/30 全 200(3801B 固定页)零差分;且 login 响应不区分「不存在」与「已注册未确认」⇒ 对半构造行无观测能力。
+- **h2 tunnelling ACL(#4)**:内层块**带空格头名**(`X-SSL-VERIFIED : 1`)仍 401(前端不按名过滤走私字节);内层直打 **动作端点** `/admin/delete?username=carlos`(全 X-SSL 头 + X-FRONTEND-KEY)仍 401(2866B)、事后横幅未解 ⇒ 动作端点自己重做角色门,不存在「页门严、动作松」。
+
+方法论沉淀:面对「一切面都干净」的 lab,本轮四题的价值都在**把假设钉死**(证伪比新线索更省下一批的重复劳动);把「从未打过的半区/从未用过的观测原语」当检查表逐项关掉,是 stuck 池复攻的正确节奏。
+
+环境:沙箱网络本轮再起两次 stall(`os error 11` / status-line timeout),`nap 20` 后必恢复;实例 40 分钟寿命依旧(本轮 4 题全部重 launch,均换新域名)。
 
