@@ -2,8 +2,8 @@
 metadata:
   node_type: memory
 name: "PRS Lab Campaign"
-description: "4 stuck 攻击批(批50):1 solved(h2 隧道毒缓存收口)/ 3 stuck;Q4 可见性探针自污染、Q2 信任位记死、Q1 infra-blocked"
-last_updated: 2026-10-07T18:53:20+08:00
+description: "批51 stuck 池复攻:4 题全 stuck 但各得新证据(cookie 500=mismatch 纠正、confirm 空 token 被 403 证伪、隧道路径证伪信任位伪造)+ http_session 偶发挂死改用 http_dump/raw_matrix 的环境教训"
+last_updated: 2026-10-08T08:18:23+08:00
 created: 2026-10-06T22:18:05+08:00
 ---
 
@@ -197,4 +197,24 @@ Batch 50(4 stuck 攻击批 · pH 三工作台蒸馏处方落地后首攻):**1 so
 - **stuck / infra-blocked** `advanced/lab-request-smuggling-0cl-request-smuggling`(实例 `0a450054042817e780fd179b00380068`)— `desync_probe` 20 候选 **suspects=[]**。三格 **0 响应**(`cl-colon-space`/`cl-tab-name`/`cl-lower`)= 前端解析畸变 CL 名并按真 CL 等 body(探针被吃进 body)⇒ 「前端计数」与 0.CL 要求的「前端不计数」相反 ⇒ **H-V 头 holding 前提在本 infra 否证**(跨批 44/47/49/50 稳定)。记 infra-blocked,不再投轮次;建议件面把 `desync_probe` 补三态(answered_probe / first_byte_ms / class,把 0 响应标 `front_hold` 而非"非 suspect")。
 
 纪律/工具面:全部 HTTP 走件;`h2_req --pad-path-to` 是本题的关键 sizing 原语;`race_spread`(1.2.0 已有 `--class` 体长类 oracle)与 `race_send --n`;`desync_probe`(20 候选)。沉淀:四条实录改写(1 solved / 3 stuck,含批50 证据表);新原子笔记 [[h2-tunnel-cache-poison-pad-landing]](连 h2-smuggling-family + solves 实录)与 [[visibility-probe-must-be-non-mutating]](连 race-conditions-family + 实录)。
+
+
+## 2026-10-08
+
+## 批51 stuck 池复攻(4 题,progress 114/5/4 → 0 新解)
+
+逐题终态(实例与证据见 knowledge records/lab-*):
+
+- **lab-discovering-vulnerabilities-quickly-with-targeted-scanning**(#1,stuck):stock 端点的"按串定值"证实是**每实例种子化 mock**(同串稳定、同路径异拼写各异值 ⇒ 非文件读);`;sleep 7/10` 计时 2.3s vs 基线 2.2s ⇒ **无命令注入**;/image 15 变体 + /resources 3 变体 + 8 种异形编码(`..;/`、overlong、双编码、`%00`)全 404;X-Original-URL/X-Rewrite-URL 无效。新发现:10 分钟到点后全站返回 Time's up,`/try-again` 可重置;到点前后实例曾整体挂死 ~5 分钟自愈(与计时器混杂,不记作注入证据)。
+- **lab-scanning-non-standard-data-structures**(#2,stuck):**纠正批50 判读** —— session cookie 的 500 不是"用户名未知",而是"cookie 两半不匹配"(身份取 token,用户名须与之相等),故所有 username 半注入读数都被 500 掩盖、不可用作"不可注入"证据;token 半精确定长匹配(无前缀/大小写宽容);重复 session cookie **后一个生效**(无 split-brain);/my-account/change-email 首扫 10 值全 302 无差分;/admin/delete 直接打 -> 401。
+- **lab-race-conditions-partial-construction**(#3,stuck):确认腿 = `POST /confirm?token=…`(`GET /confirm?token=X` 无校验恒 200);**空 token(`token=`/`%20`/`+`)被 app 层 403 `Forbidden`** ⇒「半构造行 token 为空串 + `WHERE token = ?`」这条路被证伪;`token[]=` 绕过 403 但绑定 `''`(400 `Incorrect token: Array`);csrf 会话级可复用;email 白名单强校验(exploit-server 地址 3119 拒);同用户名 8 并发注册 → 4 新 INSERT + 4 DUP(存在性检查 TOCTOU);读侧播撒(4 worker×25ms×9s=36 条)配 4 个并发注册窗口 → 0 命中。
+- **lab-request-smuggling-h2-bypass-access-controls-via-request-tunnelling**(#4,stuck):头名带尾随空格(`--hdr2 'X-SSL-VERIFIED ||1'`)被前端**放行**但直达 /admin 仍 401;内层块带 `X-SSL-VERIFIED:1`+`X-SSL-CLIENT-CN:administrator`+泄漏的 `X-FRONTEND-KEY:678833581` -> 内层仍 401 ⇒ 后端不采信客户端自带证书头,信任位不可伪造/不可借用。
+
+工具/环境教训(本轮新增):
+
+- **http_session 会偶发整段挂死**(同一会话内,同一目标 http_dump / raw_matrix / banner_verdict 正常)。遇到 http_session 超时时**立刻换 http_dump 或 raw_matrix**,不要重试同一件。
+- 沙箱网络偶发 `Resource temporarily unavailable (os error 11)` 与 status-line 超时:重试或 `nap 20` 后再试即可;range_launch 的 widget API 也会瞬时超时。
+- lab 实例有寿命:批51 里 lab3/lab4 的实例在 ~40 分钟后变 504 Gateway Timeout,需重新 range_launch(会换新域名);同 lab 重复 range_launch 通常回同一实例(即使已挂死),要等 PortSwigger 回收。
+- raw_matrix 的 spec 里 Content-Length 必须自己算准:少 1 字节会让服务端等字节 -> 500/timeout,本轮两次误判都源于此(已修正计数)。
+- `/try-again` 是这套带计时器 lab 的重置入口(10 分钟窗口)。
 

