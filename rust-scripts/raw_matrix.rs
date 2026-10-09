@@ -1,7 +1,7 @@
 #!/usr/bin/env rust-script
 //! name: raw_matrix
-//! description: Byte-level request matrix - send N caller-controlled raw HTTP/1.1 requests (each on its own TLS/TCP connection) from one inline/file spec and report per-variant status, bytes, digest, Set-Cookie names, X-Cache/Age/Location, a marker hit and a body snippet, so a whole parsing/cache hypothesis space is provable in ONE envelope. Host note (kimi G1, cross-problem 2): the spec carries its own Host header per variant - do not also write Host in the request headers of the template or every variant 400s. [note](kimi 129 实证):编码/过滤面盘走两段序——先标签面盘(变体=标签集,锚定放行标签),再属性面盘(变体=事件属性集,锚定放行属性);两轮各一次矩阵,不要逐变体单发。 [sweep](W2 件化,129 实证 135+115 变体曾全手搓):模板的 line/headers/body 留 {{V}} 槽,--values 给值表(内联逗号表或 @file 每行一值,# 注释行跳过),模板×值表叉乘展开成整张矩阵,单调用覆盖整个面盘。
-//! version: 1.1.2
+//! description: Byte-level request matrix - send N caller-controlled raw HTTP/1.1 requests (each on its own TLS/TCP connection) from one inline/file spec and report per-variant status, bytes, digest, Set-Cookie names, X-Cache/Age/Location, a marker hit and a body snippet, so a whole parsing/cache hypothesis space is provable in ONE envelope. Host note (kimi G1, cross-problem 2): the spec carries its own Host header per variant - do not also write Host in the request headers of the template or every variant 400s. Deadline note (kimi): no internal cap exists - budget variants x ~15s wall-clock yourself, or the run self-harms the window. [note](kimi 129 实证):编码/过滤面盘走两段序——先标签面盘(变体=标签集,锚定放行标签),再属性面盘(变体=事件属性集,锚定放行属性);两轮各一次矩阵,不要逐变体单发。 [sweep](W2 件化,129 实证 135+115 变体曾全手搓):模板的 line/headers/body 留 {{V}} 槽,--values 给值表(内联逗号表或 @file 每行一值,# 注释行跳过),模板×值表叉乘展开成整张矩阵,单调用覆盖整个面盘。
+//! version: 1.1.3
 //! args: <spec.json|@file|inline-json> [--quiet] [--values <a,b,c|@wordlist>]
 //! keywords: raw, http, matrix, request-line, host-header, cache, parsing, ssrf, knife
 //!
