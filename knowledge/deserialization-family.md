@@ -32,7 +32,12 @@ Keywords: deserialization, insecure deserialization, gadget chain, rO0, php obje
    到的事,无需新代码执行。
 4. **gadget 链**:调起应用可达类链执行命令/请求;PHP 常见预建链、Ruby 有
    通用公开链、Java 依赖具体库版本(Apache Commons 系最著录)。外部生成
-   优先(公开 gadget 生成器/ysoserial 族),本仓不自造链,即 件面只做投递。
+   优先(公开 gadget 生成器/ysoserial 族),本仓不自造链,件面只做投递
+  (分工:ysoserial 类外部产物当前无件接手,落回脚本手搓投递)。
+- **变体注(自研链子型,kimi 跨题=2:custom PHP/Java)**:应用内自研链
+  路线=源码泄露(页注释/备份文件)定点 `__wakeup`/`__destruct`/`readObject`
+  钩子后,PHP 用 phpser 直铸对象图,Java 用同名 FQN+serialVersionUID=1L
+  复刻类经 java_ser 本地编译序列化(复刻类路线与 java_ser 合同严丝合缝)。
 
 ## 件组合
 
