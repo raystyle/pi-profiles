@@ -279,6 +279,8 @@ fn main() {
     };
 
     let data = json!({
+        "plus_count": payload.matches('+').count(),
+        "base64_url_encoded": payload.replace('+', "%2B"),
         "base64": payload,
         "bytes": raw.len(),
         "command": cmd,
