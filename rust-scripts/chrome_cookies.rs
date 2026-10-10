@@ -1,7 +1,7 @@
 #!/usr/bin/env rust-script
 //! name: chrome_cookies
 //! description: Decrypt a Chrome/Chromium Linux cookie DB offline (v10 = AES-128-CBC, key PBKDF2("peanuts","saltysalt",1,16), legacy 16-byte prefix + PKCS7) and export a host->name->value jar that lab_http/objref_scan read natively.
-//! version: 1.0.0
+//! version: 1.0.1
 //! args: <cookie-db-path> [--host SUBSTR] [--out JAR] [--password SECRET]
 //! keywords: chrome, chromium, cookies, decrypt, session, jar, v10, cbc, aes
 //!
@@ -61,7 +61,7 @@ fn main() {
         pi_rust_lib::report::failure(
             "chrome_cookies",
             "missing cookie db path",
-            "call as: chrome_cookies <profile>/Default/Cookies [--host portswigger.net] [--out jar.json]",
+            "call as: chrome_cookies <profile>/Default/Cookies [--host portswigger.net] [--out jar.json]", // binding-exempt: usage example of --host filter
         );
         std::process::exit(2);
     }

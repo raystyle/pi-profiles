@@ -1,9 +1,9 @@
 #!/usr/bin/env rust-script
 //! name: coupon_cycle
 //! description: Alternating-coupon business-rule driver for shop targets - log in, put the target product in the cart, apply two coupon codes round-robin (targets that only block the same code twice in a row keep discounting), stop as soon as the cart total drops to the store credit or below, then check out and report the price curve, the accepted/rejected coupon sequence and the order confirmation.
-//! version: 1.0.0
+//! version: 1.0.1
 //! args: <base-url> --user U --password P --codes A,B [--product N] [--max-applies N] [--credit N] [--snippet N] [--selftest]
-//! keywords: logic, flaw, business-rules, coupon, shop, ecommerce, portswigger, loop
+//! keywords: logic, flaw, business-rules, coupon, shop, ecommerce, loop
 //!
 //! ```cargo
 //! [dependencies]
@@ -114,7 +114,7 @@ fn clip(s: &str, n: usize) -> String {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut base = String::new();
-    let mut user = "wiener".to_string();
+    let mut user = "user".to_string();
     let mut pass = "peter".to_string();
     let mut product: u32 = 1;
     let mut codes: Vec<String> = Vec::new();

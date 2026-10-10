@@ -1,7 +1,7 @@
 #!/usr/bin/env rust-script
 //! name: login_brute
 //! description: 顺序口令爆破件(带诱饵重置)- 用候选口令逐个 POST 登录表单,按 --reset-every 个失败插入一次诱饵账号的成功登录把"失败计数"清零,绕开按 IP 计的封禁;命中即停,把会话 cookie 写回 jar 并复验账户页,一个信封给出中选口令、尝试数、诱饵数与封禁迹象
-//! version: 1.0.0
+//! version: 1.0.1
 //! args: <url> --user U (--passwords FILE | --pass-list 'a,b,c') [--decoy U:P] [--reset-every N] [--jar PATH] [--field-user username] [--field-pass password] [--fail-marker S] [--block-marker S] [--extra k=v]... [--confirm-path /my-account] [--snippet N] [--timeout-ms N] [--selftest]
 //! keywords: 漏洞猎手套件, 爆破, 口令, 认证, brute, password, login, ip-block, 诱饵重置
 //!
@@ -458,8 +458,8 @@ fn load_jar(path: &str) -> Jar {
 
 fn selftest() {
     let list_ok = split_list("a, b c\n") == vec!["a".to_string(), "b".to_string(), "c".to_string()];
-    let body_ok = form_body(&[("username".into(), "carlos".into()), ("password".into(), "a b".into())])
-        == "username=carlos&password=a%20b";
+    let body_ok = form_body(&[("username".into(), "user1".into()), ("password".into(), "a b".into())])
+        == "username=user1&password=a%20b";
     let oracle_ok = is_hit(302, "", "Incorrect password")
         && !is_hit(200, "<p>Incorrect password</p>", "Incorrect password")
         && is_hit(200, "Log out", "Incorrect password");
