@@ -1,7 +1,7 @@
 #!/usr/bin/env rust-script
 //! name: money_loop
 //! description: Drive a coupon-vs-redeemable arbitrage loop on a shop target - log in, repeatedly buy the discounted redeemable product, redeem every code at face value, then buy the goal product; one envelope carries the credit curve and the final order.
-//! version: 1.0.0
+//! version: 1.1.0
 //! args: <base-url> <username> <password> --coupon CODE --gift-product N --price N --target N --target-product N [--max-qty N] [--cycles N]
 //! keywords: logic, flaw, shop, gift-card, coupon, money, loop, ecommerce, arbitrage
 //!
