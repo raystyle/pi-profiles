@@ -283,3 +283,6 @@ h2_req <url> --method HEAD --path /admin \
 ## Links
 
 - evidences: [[academy-edge-lab-cookie-gate]]
+## 平台反作弊实例锁(2026-10-10 实证)
+
+- 自供 `_lab` cookie 触发 `400 Too Nosy`(「Tampering with the _lab cookie is not required…」);边缘把 Host 段锁为实例名 allowlist(含 absolute-form 请求行);四旁路(转发头/重复头/h2 伪头/连接态)实测关闭——Host 变体类实验不携带 `_lab` 即可正常回包。
