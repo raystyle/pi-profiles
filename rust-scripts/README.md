@@ -12,13 +12,13 @@ cookies、lab_alert、page_snapshot、page_interact、reqseq 等已升内置)。
 
 | 件 | 职责 | 溯源 |
 | --- | --- | --- |
-| `lab_http.rs` | cookie-jar HTTP 客户端:get/post/submitform/手工重定向 | IDOR 轮(pi 自写) |
+| `lab_http.rs` | (已晋 bundled,本地副本退役)cookie-jar HTTP 客户端:get/post/submitform/手工重定向 | IDOR 轮(pi 自写) |
 | `chrome_cookies.rs` | Chrome Linux cookie 库离线解密(v10/v11,peanuts 派生键),导出 jar | IDOR 轮(Python 助手 rs 化,监督审查改进项) |
 | `lab_launch.rs` | 靶场实例发射整链封装(widget 渲染 + Auth0 OIDC 回放) | IDOR 轮 |
 | `objref_scan.rs` | 对象引用枚举(FUZZ 区间/清单探,非 404 命中与长度簇报告) | IDOR 轮 |
 | `solved_check.rs` | 实例横幅判读(is-solved + congratulation 行) | IDOR 轮 |
-| `gql_alias_brute.rs` | GraphQL 登录别名爆破:单请求并置 N 个别名的 login mutation 绕限速,回命中别名/口令/token 并写入 jar | GraphQL 批(第 4 题) |
-| `lab_page.rs` | 题面抓取并剥离 solution 折叠块(全部 `<details>`+`<script>`)后再读,回 widget-lab-id/标题/题面 | GraphQL 批(规则更正后) |
+| `gql_alias_brute.rs` | (已晋 bundled,本地副本退役)GraphQL 登录别名爆破:单请求并置 N 个别名的 login mutation 绕限速 | hunter chest 批预置,graphql 批 brute 题首战 |
+| `lab_page.rs` | (已晋 bundled,本地副本退役)题面抓取并剥离 solution 折叠块后读,回 widget-lab-id/标题/题面 | GraphQL 批(规则更正后) |
 | `html_text.rs` | HTML 手术刀:按标签取文本或属性(`--tag`/`--attr`/`--contains`/`--tokens`,`--out` 落行文件),补 text_* 不做 HTML 结构的空白 | 工具纪律更正后 |
 | `json_pick.rs` | JSON 手术刀:对 JSON 文件跑 jaq 过滤取字段,补 text_* 不做 JSON 的空白 | 工具纪律轮 |
 | `labkit_sync.rs` |  把项目级件集镜像进可运行全局脚本目录,只拷新增/变更件,幂等 | 工具纪律轮 |
