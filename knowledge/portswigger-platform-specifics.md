@@ -271,10 +271,10 @@ h2_req <url> --method HEAD --path /admin \
 - 毒 Host(裸改写为外部域)在现代边缘全通道封:正常域 h1/h2 皆直接击杀,
   `.h1-` 形域 421/403;`X-Forwarded-Host`/`X-Forwarded-For`/子域/大小写变体全灭。
 - 浏览器臂不可改 `:authority` 伪头与 Host(均在改写面外),CDP 原生指纹无解。
-- 连接态松弛(首请求合法 Host 后连接放行毒 Host)是连接态题的专属设计,
-  不跨题共享;同族余题打了连接态打底仍无松弛。
-- 解锁条件:Burp 级 TLS 客户端(TLS 指纹与 Burp 一致才过边缘);rs 件栈
-  的 rustls 指纹当前不过。
+- 连接态松弛(首请求合法 Host 后连接放行毒 Host)成立的钥匙是边缘墙的 lab 会话 cookie
+  (2026-10-10 实战证伪旧判;TLS 指纹非门槛)。
+- 解锁条件(已被实战证伪,2026-10-10):钥匙不是 TLS 指纹——边缘墙要求的 lab 会话 cookie
+  带上后,同 TCP 连接先合法 Host 紧接毒 Host 即放行(连接态松弛成立;rs 件栈直射可达)。
 
 ## 走私:TE.TE 实测方向(迁自 request-smuggling-family)
 
