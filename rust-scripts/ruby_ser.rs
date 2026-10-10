@@ -229,7 +229,7 @@ fn main() {
     }
 
     if selftest && cmd.is_empty() {
-        cmd = "rm /home/carlos/morale.txt".to_string();
+        cmd = "id".to_string();
     }
     if cmd.is_empty() {
         pi_rust_lib::report::failure(

@@ -1,9 +1,9 @@
 #!/usr/bin/env rust-script
 //! name: money_loop
-//! description: Drive the PortSwigger "infinite money" logic-flaw loop on a shop lab - log in, repeatedly buy discounted gift cards, redeem every code for face value, then buy the target item; one envelope carries the credit curve and the final order.
+//! description: Drive a coupon-vs-redeemable arbitrage loop on a shop target - log in, repeatedly buy the discounted redeemable product, redeem every code at face value, then buy the goal product; one envelope carries the credit curve and the final order.
 //! version: 1.0.0
-//! args: <base-url> <username> <password> [--coupon CODE] [--gift-product N] [--price N] [--target N] [--max-qty N] [--cycles N] [--jacket-product N]
-//! keywords: logic, flaw, shop, gift-card, coupon, money, loop, portswigger, ecommerce
+//! args: <base-url> <username> <password> --coupon CODE --gift-product N --price N --target N --target-product N [--max-qty N] [--cycles N]
+//! keywords: logic, flaw, shop, gift-card, coupon, money, loop, ecommerce, arbitrage
 //!
 //! ```cargo
 //! [dependencies]
@@ -122,13 +122,13 @@ fn main() {
     let mut base = String::new();
     let mut user = String::new();
     let mut pass = String::new();
-    let mut coupon = "SIGNUP30".to_string();
-    let mut gift_product: u32 = 2;
-    let mut price = 10.0f64;
-    let mut target = 1400.0f64;
+    let mut coupon = String::new();
+    let mut gift_product: u32 = 0;
+    let mut price = 0.0f64;
+    let mut target = 0.0f64;
     let mut max_qty: i64 = 99;
     let mut max_cycles: u32 = 12;
-    let mut jacket_product: u32 = 1;
+    let mut jacket_product: u32 = 0;
 
     let mut i = 0;
     while i < args.len() {
@@ -139,7 +139,7 @@ fn main() {
             "--target" => { i += 1; target = args[i].parse().unwrap_or(target); }
             "--max-qty" => { i += 1; max_qty = args[i].parse().unwrap_or(max_qty); }
             "--cycles" => { i += 1; max_cycles = args[i].parse().unwrap_or(max_cycles); }
-            "--jacket-product" => { i += 1; jacket_product = args[i].parse().unwrap_or(jacket_product); }
+            "--jacket-product" | "--target-product" => { i += 1; jacket_product = args[i].parse().unwrap_or(jacket_product); }
             other if base.is_empty() => base = other.trim_end_matches('/').to_string(),
             other if user.is_empty() => user = other.to_string(),
             other if pass.is_empty() => pass = other.to_string(),
@@ -148,12 +148,16 @@ fn main() {
         i += 1;
     }
     if base.is_empty() || user.is_empty() || pass.is_empty() {
-        pi_rust_lib::report::failure("money_loop", "usage: money_loop <base-url> <user> <pass> [--coupon CODE] [--target N]", "pass the instance URL and wiener's credentials");
+        pi_rust_lib::report::failure("money_loop", "usage: money_loop <base-url> <user> <pass> --coupon CODE --gift-product N --price N --target N --target-product N", "pass the instance URL and the account credentials");
+        std::process::exit(2);
+    }
+    if coupon.is_empty() || gift_product == 0 || jacket_product == 0 || price <= 0.0 || target <= 0.0 {
+        pi_rust_lib::report::failure("money_loop", "lab-shaped values are required, not defaulted", "pass --coupon (the discount code), --gift-product and --target-product (product ids), --price (redeemable face value) and --target (goal cost) explicitly");
         std::process::exit(2);
     }
 
     match run(base, user, pass, coupon, gift_product, price, target, max_qty, max_cycles, jacket_product) {
-        Ok(payload) => pi_rust_lib::report::success("money_loop", payload, "check final_credit and the jacket order").unwrap_or(()),
+        Ok(payload) => pi_rust_lib::report::success("money_loop", payload, "check final_credit and the goal-product order").unwrap_or(()),
         Err(e) => {
             pi_rust_lib::report::failure("money_loop", &e, "rerun after checking the session and coupon");
             std::process::exit(1);
